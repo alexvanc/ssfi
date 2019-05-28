@@ -1,4 +1,4 @@
-package com.alex.llfi;
+package com.alex.ssfi;
 
 import java.util.*;
 
@@ -46,7 +46,7 @@ public class GotoTransformer extends BodyTransformer {
 			Scene.v().getMainClass().addField(gotoCounter);
 			addedCounter=true;
 		}
-		
+//		
 		Chain<Unit> units=b.getUnits();
 		Iterator<Unit> stmIt=units.snapshotIterator();
 		while(stmIt.hasNext()) {

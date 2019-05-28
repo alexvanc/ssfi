@@ -12,6 +12,9 @@ public class WorkBench {
     }
 
     public long calculate(long testNumber) {
+    	for(int i=0;i<5;i++) {
+    		testNumber=testNumber+1;
+    	}
         System.out.println("Calculation result: " + testNumber);
         return testNumber;
     }
@@ -26,6 +29,8 @@ public class WorkBench {
 
         } catch (NullPointerException e) {
             System.out.println("Exception");
+        } catch (Exception e) {
+        	System.out.println("Other Exception");
         }
         return;
 

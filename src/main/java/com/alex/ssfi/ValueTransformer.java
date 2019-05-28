@@ -1,33 +1,17 @@
-package com.alex.llfi;
+package com.alex.ssfi;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import soot.Body;
 import soot.BodyTransformer;
 import soot.Local;
 import soot.LongType;
-import soot.Modifier;
-import soot.RefType;
-import soot.Scene;
-import soot.SootField;
-import soot.SootMethod;
-import soot.Type;
 import soot.Unit;
-import soot.Value;
-import soot.ValueBox;
 import soot.jimple.AddExpr;
 import soot.jimple.AssignStmt;
-import soot.jimple.GotoStmt;
-import soot.jimple.IdentityStmt;
-import soot.jimple.InvokeExpr;
-import soot.jimple.InvokeStmt;
 import soot.jimple.Jimple;
 import soot.jimple.LongConstant;
-import soot.jimple.ReturnStmt;
-import soot.jimple.ReturnVoidStmt;
-import soot.jimple.StaticInvokeExpr;
 import soot.jimple.Stmt;
 import soot.util.Chain;
 
