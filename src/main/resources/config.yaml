@@ -1,0 +1,42 @@
+Configuration:
+  injectionMode: batch
+  inputPath:
+  outputPath:
+  
+  singleRun:
+    type: ValueFault
+    locationPattern:
+      package: 
+      class: 
+      method: \*calculate\*
+    variableType: long
+    action: ADD
+    
+  batchRun:
+    counter: 100
+    distributionMode: fix
+    faultList:
+    -
+      singleRun:
+        type: ValueFault
+        distribution: 0.5
+        locationPattern:
+          packageP: 
+          classP: 
+          methodP: \*calculate\*
+        variableType: LONG
+        action: ADD 
+    -
+      singleRun:
+        type: ExceptionShortCircuit
+        distribution: 0.5
+        locationPattern:
+          package: 
+          class: 
+          method: \*try\*
+        exceptionType: THROW
+        action: FIRST 
+
+  
+  
+ 
