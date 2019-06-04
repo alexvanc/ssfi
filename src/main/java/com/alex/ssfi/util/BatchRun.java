@@ -5,7 +5,7 @@ import java.util.List;
 public class BatchRun {
     private int counter;
     private String distributionMode;
-    private List<SingleRun> instances;
+    private List<SingleRun> faultList;
     public int getCounter() {
         return counter;
     }
@@ -18,11 +18,11 @@ public class BatchRun {
     public void setDistributionMode(String distributionMode) {
         this.distributionMode = distributionMode;
     }
-    public List<SingleRun> getInstances() {
-        return instances;
-    }
-    public void setInstances(List<SingleRun> instances) {
-        this.instances = instances;
-    } 
+	public List<SingleRun> getFaultList() {
+		return faultList;
+	}
+	public void setFaultList(List<SingleRun> faultList) {
+		this.faultList = faultList;
+	}
 
 }

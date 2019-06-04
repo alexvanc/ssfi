@@ -1,19 +1,13 @@
 package com.alex.ssfi.util;
 
 public class SingleRun {
-    private String faultType;
-    private LocaltionPattern pattern;
+    private String type;
+    private LocaltionPattern locationPattern;
     private String variableType;
     private String action;
     private String exceptionType;
     private String distribution;
         
-    public String getFaultType() {
-        return faultType;
-    }
-    public void setFaultType(String faultType) {
-        this.faultType = faultType;
-    }
     public String getVariableType() {
         return variableType;
     }
@@ -26,12 +20,7 @@ public class SingleRun {
     public void setAction(String action) {
         this.action = action;
     }
-    public LocaltionPattern getPattern() {
-        return pattern;
-    }
-    public void setPattern(LocaltionPattern pattern) {
-        this.pattern = pattern;
-    }
+
     public String getExceptionType() {
         return exceptionType;
     }
@@ -44,6 +33,18 @@ public class SingleRun {
     public void setDistribution(String distribution) {
         this.distribution = distribution;
     }
+	public String getType() {
+		return type;
+	}
+	public void setType(String type) {
+		this.type = type;
+	}
+	public LocaltionPattern getLocationPattern() {
+		return locationPattern;
+	}
+	public void setLocationPattern(LocaltionPattern locationPattern) {
+		this.locationPattern = locationPattern;
+	}
 
 }
 class LocaltionPattern{

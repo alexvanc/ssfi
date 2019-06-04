@@ -1,17 +1,29 @@
 package com.alex.ssfi;
 
 
+
+import java.io.File;
+
+import com.alex.ssfi.util.Configuration;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 
 public class Application {
     public static void main( String[] args )
     {
-        if (args.length<=2){
+        if (args.length<=0){
             return;
         }
-//        Configuration config=new Con
-        ObjectMapper mapper=new ObjectMapper(args[1]);
+        ObjectMapper mapper=new ObjectMapper(new YAMLFactory());
+        Configuration config=null;
+        try {
+        	config=mapper.readValue(new File(args[0]), Configuration.class);
+        	System.out.println("Success");
+        }catch (Exception e){
+        	System.out.println(e.getMessage());
+        	System.exit(0);
+        }
 
     }
 }
