@@ -6,7 +6,13 @@ public class SingleRun {
     private String variableType;
     private String action;
     private String exceptionType;
-    private String distribution;
+    private float distribution;
+    
+    //TO DO
+    //check conformation of configuraion rules
+    public boolean validate() {
+    	return true;
+    }
         
     public String getVariableType() {
         return variableType;
@@ -27,10 +33,10 @@ public class SingleRun {
     public void setExceptionType(String exceptionType) {
         this.exceptionType = exceptionType;
     }
-    public String getDistribution() {
+    public float getDistribution() {
         return distribution;
     }
-    public void setDistribution(String distribution) {
+    public void setDistribution(float distribution) {
         this.distribution = distribution;
     }
 	public String getType() {

@@ -19,6 +19,11 @@ public class Application {
         Configuration config=null;
         try {
         	config=mapper.readValue(new File(args[0]), Configuration.class);
+        	if(!config.validateConfig()) {
+        		System.out.println("Invalid Configuration!");
+        		return;
+        	}
+        	InjectionManager.getManager().peformInjection(config);
         	System.out.println("Success");
         }catch (Exception e){
         	System.out.println(e.getMessage());

@@ -1,6 +1,6 @@
 #! /bin/bash
 mvn clean
-mvn package
+mvn package -DskipTests
 rm ../ssfi*.jar
 rm ../WorkBench.class
 cp target/ssfi*dependen*.jar ../

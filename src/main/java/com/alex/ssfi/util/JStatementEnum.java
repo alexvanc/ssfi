@@ -16,3 +16,4 @@ public enum JStatementEnum {
 	EXITMONITOR,
 	OTHER
 }
+

@@ -14,7 +14,8 @@ public class App
     {
 //    	PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", new ValueTransformer()) );
 //        PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", new CatchTransformer()) );
-    	PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", new ThrowTransformer()) );
+//    	PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", new ThrowTransformer()) );
+    	PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", GotoTransformer.v()) );
         Main.main(args);
     }
 }

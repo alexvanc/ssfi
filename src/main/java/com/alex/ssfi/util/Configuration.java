@@ -1,5 +1,10 @@
 package com.alex.ssfi.util;
 
+import java.util.List;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class Configuration {
     private String injectionMode;
     private String inputPath;
@@ -7,9 +12,31 @@ public class Configuration {
     private SingleRun singleRun;
     private BatchRun batchRun;
     
+    private static final Logger logger=LogManager.getLogger(Configuration.class);
     public Configuration(){};
     public Configuration(String configFile){
         
+    }
+    
+    
+    public boolean validateConfig() {
+    	if (this.injectionMode==null) {
+    		return false;
+    	}
+    	if(this.injectionMode.equals("batch")) {
+    		List<SingleRun> runs=batchRun.getFaultList();
+    		for(int i=0;i<runs.size();i++) {
+    			if(!runs.get(i).validate()) {
+    				return false;
+    			}
+    		}
+    		return true;
+    	}else if(this.injectionMode.equals("single")) {
+    		return this.singleRun.validate();
+    	}else {
+    		logger.error("Invalid injectionMode!");
+    		return false;
+    	}
     }
     public String getInjectionMode() {
         return injectionMode;
