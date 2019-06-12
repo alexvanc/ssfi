@@ -12,7 +12,7 @@ import soot.LongType;
 import soot.ShortType;
 import soot.Type;
 
-public class ValueTypeHelper {
+public class FaultTypeHelper {
 	public static final int BYTE =0;
 	public static final int CHAR =1;
 	public static final int INT = 2;

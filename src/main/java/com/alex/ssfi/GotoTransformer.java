@@ -49,7 +49,16 @@ public class GotoTransformer extends BodyTransformer {
 //			Scene.v().getMainClass().addField(gotoCounter);
 //			addedCounter=true;
 //		}
-////		
+////	
+		
+		//Scene.v().loadNecessaryClasses();
+//		Scene.v().loadClassAndSupport("java.io.FileWriter");
+//		SootClass fWriterClass=Scene.v().getSootClass("java.io.FileWriter");
+//		Local writer=Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
+//		List<SootMethod> constructor=fWriterClass.getMethods();
+//		for(int i=0;i<constructor.size();i++) {
+//			System.out.println(constructor.get(i).getSubSignature());
+//		}
 		
 		String methodSignature=b.getMethod().getSignature();
 		if (!methodSignature.contains("try")){

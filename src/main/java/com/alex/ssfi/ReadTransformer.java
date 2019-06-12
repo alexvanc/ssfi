@@ -7,6 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.alex.ssfi.util.Reporter;
+import com.alex.ssfi.util.RunningParameter;
 
 import soot.Body;
 import soot.BodyTransformer;
@@ -18,7 +19,13 @@ import soot.util.Chain;
  * this class is only for learning how it identify different Jimple Statements
  */
 public class ReadTransformer extends BodyTransformer{
-	private static final Logger logger=LogManager.getLogger(ReadTransformer.class);
+	private RunningParameter parameters;
+	private static final Logger logger=LogManager.getLogger(ValueTransformer.class);
+	
+	public ReadTransformer(RunningParameter parameters) {
+		this.parameters=parameters;
+		
+	}
 
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {

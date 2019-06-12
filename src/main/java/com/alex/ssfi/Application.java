@@ -4,15 +4,20 @@ package com.alex.ssfi;
 
 import java.io.File;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.alex.ssfi.util.Configuration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 
 public class Application {
+	private static final Logger logger=LogManager.getLogger(Application.class);
     public static void main( String[] args )
     {
         if (args.length<=0){
+        	logger.fatal("Configuration file missing");
             return;
         }
         ObjectMapper mapper=new ObjectMapper(new YAMLFactory());
@@ -20,13 +25,14 @@ public class Application {
         try {
         	config=mapper.readValue(new File(args[0]), Configuration.class);
         	if(!config.validateConfig()) {
-        		System.out.println("Invalid Configuration!");
+        		logger.fatal("Invalid Configuration!");
         		return;
         	}
         	InjectionManager.getManager().peformInjection(config);
-        	System.out.println("Success");
+        	logger.info("Injection Succeed!");
         }catch (Exception e){
-        	System.out.println(e.getMessage());
+        	logger.info("Injection Failed!");
+        	logger.fatal(e.getMessage());
         	System.exit(0);
         }
 

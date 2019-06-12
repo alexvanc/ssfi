@@ -3,32 +3,39 @@ Configuration:
   name: YAMLConfigTest
   properties:
     property:
-      name: filename
-      value: target/test-yaml.log
+      name: injectfile
+      value: /tmp/injection.log
   thresholdFilter:
     level: debug
   appenders:
     Console:
       name: STDOUT
       PatternLayout:
-        Pattern: "%m%n"
+        Pattern: "%p %C{1} %m%n"
     File:
       name: File
-      fileName: ${filename}
+      fileName: ${injectfile}
       PatternLayout:
-        Pattern: "%d %p %C{1.} [%t] %m%n"
+        Pattern: "%m%n"
       Filters:
         ThresholdFilter:
-          level: error
+          level: debug
+
  
   Loggers:
     logger:
       -
         name: com.alex.ssfi
-        level: info
+        level: debug
         additivity: false
         AppenderRef:
           ref: STDOUT
+      - 
+        name: inject_recorder
+        level: debug
+        additivity: false
+        AppenderRef:
+          ref: File
     Root:
       level: error
       AppenderRef:

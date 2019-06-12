@@ -1,37 +1,40 @@
 #Configuration:
   injectionMode: batch
-  inputPath:
-  outputPath:
+  inputPath: /home/alex/work/testInput
+  outputPath: /home/alex/work/testOutput
   
   singleRun:
-    type: ValueFault
+    type: Value_Fault
     locationPattern:
       packageP: 
       classP: 
-      methodP: \*calculate\*
+      methodP: calculate
+      variableP: 
+    variableScope: 
     variableType: long
-    action: ADD
+    action: 
+    targetValue: 
     
   batchRun:
-    counter: 100
+    counter: 2
     distributionMode: fix
     faultList:
     -
-       type: ValueFault
-       distribution: 0.5
+       type: Value_Fault
+       distribution: 1
        locationPattern:
-         packageP: 
+         packageP: com.oath
          classP: 
-         methodP: \*calculate\*
-       variableType: LONG
-       action: ADD 
-    -
-       type: ExceptionShortCircuit
-       distribution: 0.5
-       locationPattern:
-         packageP: 
-         classP: 
-         methodP: \*try\*
-       exceptionType: THROW
-       action: FIRST 
+         methodP: 
+       variableType: 
+       action:  
+ #   -
+ #      type: ExceptionShortCircuit
+ #      distribution: 0.5
+ #      locationPattern:
+ #        packageP: 
+ #        classP: 
+ #        methodP: \*try\*
+ #      exceptionType: THROW
+ #      action: FIRST 
  

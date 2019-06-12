@@ -2,21 +2,22 @@
 import java.io.IOException;
 
 public class WorkBench {
+	public long testNumber = 9;
     public static void main(String[] args) throws IOException {
         WorkBench test = new WorkBench();
-        long testNumber = 9;
         String testText = "test";
-        test.calculate(testNumber);
+        test.calculate(test.testNumber);
         test.tryAndCatch(testText);
-        test.throwException(testNumber);
+        test.throwException(test.testNumber);
     }
 
     public long calculate(long testNumber) {
-    	for(int i=0;i<5;i++) {
-    		testNumber=testNumber+1;
-    	}
+//    	for(int i=0;i<5;i++) {
+    		this.testNumber=this.testNumber+1;
+//    	}
         System.out.println("Calculation result: " + testNumber);
-        return testNumber;
+//        return testNumber;
+    		return this.testNumber;
     }
 
     public void tryAndCatch(String flag) {

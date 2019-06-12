@@ -4,7 +4,9 @@ public class SingleRun {
     private String type;
     private LocaltionPattern locationPattern;
     private String variableType;
+    private String variableScope;
     private String action;
+    private String targetValue;
     private String exceptionType;
     private float distribution;
     
@@ -51,12 +53,43 @@ public class SingleRun {
 	public void setLocationPattern(LocaltionPattern locationPattern) {
 		this.locationPattern = locationPattern;
 	}
+	
+	public String getPackagePattern() {
+		return this.locationPattern.getPackageP();
+	}
+	public String getClassPattern() {
+		return this.locationPattern.getClassP();
+	}
+	public String getMethodPattern() {
+		return this.locationPattern.getMethodP();
+	}
+	public String getVariablePattern() {
+		return this.locationPattern.getVariableP();
+	}
+
+	public String getVariableScope() {
+		return variableScope;
+	}
+
+	public void setVariableScope(String variableScope) {
+		this.variableScope = variableScope;
+	}
+
+	public String getTargetValue() {
+		return targetValue;
+	}
+
+	public void setTargetValue(String targetValue) {
+		this.targetValue = targetValue;
+	}
+
 
 }
 class LocaltionPattern{
     private String packageP;
     private String classP;
     private String methodP;
+    private String variableP;
     public String getPackageP() {
         return packageP;
     }
@@ -74,6 +107,12 @@ class LocaltionPattern{
     }
     public void setMethodP(String methodP) {
         this.methodP = methodP;
-    } 
+    }
+	public String getVariableP() {
+		return variableP;
+	}
+	public void setVariableP(String variableP) {
+		this.variableP = variableP;
+	} 
     
 }
