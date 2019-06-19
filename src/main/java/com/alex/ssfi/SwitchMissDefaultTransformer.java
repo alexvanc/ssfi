@@ -1,11 +1,10 @@
 package com.alex.ssfi;
 
-import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,28 +12,16 @@ import org.apache.logging.log4j.Logger;
 import com.alex.ssfi.util.RunningParameter;
 
 import soot.Body;
-import soot.BodyTransformer;
-import soot.Local;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
-import soot.jimple.AssignStmt;
 import soot.jimple.GotoStmt;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeStmt;
-import soot.jimple.Jimple;
 import soot.jimple.Stmt;
-import soot.jimple.StringConstant;
 import soot.jimple.SwitchStmt;
 import soot.util.Chain;
 
-public class SwitchMissDefaultTransformer extends BodyTransformer {
-	private Map<String, String> injectInfo = new HashMap<String, String>();
-	private RunningParameter parameters;
-	private final Logger logger = LogManager.getLogger(ValueTransformer.class);
-	private final Logger recorder = LogManager.getLogger("inject_recorder");
+public class SwitchMissDefaultTransformer extends BasicTransformer {
+
+	private final Logger logger = LogManager.getLogger(SwitchMissDefaultTransformer.class);
 
 	public SwitchMissDefaultTransformer(RunningParameter parameters) {
 		this.parameters = parameters;
@@ -44,104 +31,141 @@ public class SwitchMissDefaultTransformer extends BodyTransformer {
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
+
+		this.methodIndex++;
 		if (this.parameters.isInjected()) {
 			return;
 		}
-		String methodSignature = b.getMethod().getName();
-		String targetMethodName = this.parameters.getMethodName();
-		if ((targetMethodName != null) && (!targetMethodName.equalsIgnoreCase(methodSignature))) {
-			return;
-		}
-		this.injectInfo.put("FaultType", "SWITCH_MISS_DEFAULT_FAULT");
-		this.injectInfo.put("Package", b.getMethod().getDeclaringClass().getPackageName());
-		this.injectInfo.put("Class", b.getMethod().getDeclaringClass().getName());
-
-		Chain<Unit> units = b.getUnits();
-		Iterator<Unit> unitItr = units.iterator();
-		// choose one scope to inject faults
-		// if not specified, then randomly choose
-		while (unitItr.hasNext()) {
-			Stmt stmt = (Stmt) unitItr.next();
-			if (stmt instanceof SwitchStmt) {
-				if (this.inject(b, stmt)) {
-					List<Stmt> actStmts = this.createActivateStatement(b);
-					for (int i = 0; i < actStmts.size(); i++) {
-						if (i == 0) {
-							units.insertBefore(actStmts.get(i), stmt);
-						} else {
-							units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-						}
-					}
-					this.parameters.setInjected(true);
-					this.recordInjectionInfo();
-					break;
-				}
+		String methodName = b.getMethod().getName();
+		String methodSubSignature = b.getMethod().getSubSignature();
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
+			if (!this.foundTargetMethod) {
+				// randomly generate a target method
+				this.generateTargetMethod(b);
+			}
+			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
+				this.startToInject(b);
+			} else {
+				return;
+			}
+		} else {// in the customized method mode
+			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
+				this.startToInject(b);
+			} else {
+				return;
 			}
 		}
+
+	}
+
+	private void startToInject(Body b) {
+		// no matter this inject fails or succeeds, this targetMethod is already used
+		this.foundTargetMethod = false;
+		SootMethod targetMethod = b.getMethod();
+		this.injectInfo.put("FaultType", "SWITCH_MISS_DEFAULT_FAULT");
+		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
+		this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());
+		this.injectInfo.put("Method", targetMethod.getSubSignature());
+
+		logger.debug("Try to inject SWITCH_MISS_DEFAULT_FAULT into " + this.injectInfo.get("Package") + " "
+				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+
+		List<Stmt> allSwtichStmts = this.getAllSwitchStmt(b);
+		while (true) {
+			int stmtsSize = allSwtichStmts.size();
+			if (stmtsSize == 0) {
+				break;
+			}
+			int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtsSize);
+			Stmt switchStmt = allSwtichStmts.get(stmtIndex);
+			allSwtichStmts.remove(stmtIndex);
+
+			// finally perform injection
+			if (this.inject(b, switchStmt)) {
+				this.parameters.setInjected(true);
+				this.recordInjectionInfo();
+				logger.debug("Succeed to inject SWITCH_MISS_DEFAULT_FAULT into " + this.injectInfo.get("Package") + " "
+						+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+				return;
+			} else {
+				logger.debug("Failed injection:+ " + this.formatInjectionInfo());
+			}
+		}
+
+		logger.debug("Fail to inject" + this.formatInjectionInfo());
+
+	}
+
+	private List<Stmt> getAllSwitchStmt(Body b) {
+		// TODO Auto-generated method stub
+		List<Stmt> stmts = new ArrayList<Stmt>();
+		Iterator<Unit> unitItr = b.getUnits().snapshotIterator();
+		while (unitItr.hasNext()) {
+			Stmt tmpStmt = (Stmt) unitItr.next();
+			if (tmpStmt instanceof SwitchStmt) {
+				stmts.add(tmpStmt);
+			}
+		}
+		return stmts;
+	}
+
+	private void generateTargetMethod(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		if (this.methodIndex >= allMethods.size()) {
+			return;
+		}
+		int targetMethodIndex = new Random(System.currentTimeMillis())
+				.nextInt(allMethods.size() - this.methodIndex + 1);
+		this.foundTargetMethod = true;
+		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
+		return;
 	}
 
 	private boolean inject(Body b, Stmt stmt) {
 		// TODO Auto-generated method stub
 		try {
-			Chain<Unit> units = b.getUnits();
-			Iterator<Unit> unitItr = units.snapshotIterator();
 			SwitchStmt switchStmt = (SwitchStmt) stmt;
-			Unit targetUnit = switchStmt.getDefaultTarget();
-			while (unitItr.hasNext()) {
-				Unit tmp = unitItr.next();
-				if (tmp.equals(targetUnit)) {
-					while (unitItr.hasNext()) {
-						Stmt tmpStmt = (Stmt) unitItr.next();
-						if (tmpStmt instanceof GotoStmt) {
-							return true;
-						} else {
-							units.remove(tmpStmt);
-						}
-					}
-				}
-
+			List<Unit> targets = switchStmt.getTargets();
+			List<Integer> availableTargetIndex = new ArrayList<Integer>();
+			for (int i = 0; i < targets.size() - 1; i++) {
+				availableTargetIndex.add(i);
 			}
+			// find a break target to directly go out switch
+			boolean foundBreakTarget = false;
+			Unit breakStmt = null;
+			Chain<Unit> units = b.getUnits();
+			for (int j = 1; j < targets.size(); j++) {
+				Unit caseBranch = targets.get(j);
+				Unit stmtBeforeCase = units.getPredOf(caseBranch);
+				if (stmtBeforeCase instanceof GotoStmt) {
+					foundBreakTarget = true;
+					breakStmt = stmtBeforeCase;
+				}
+			}
+			if (!foundBreakTarget) {// couldn't find destination for break
+				this.logger.debug(this.formatInjectionInfo());
+				return false;
+			}
+			
+			GotoStmt breakDestination = (GotoStmt) breakStmt;
+			Unit destinationUnit=breakDestination.getTarget();
+		
+			switchStmt.setDefaultTarget(breakDestination.getTarget());
+			List<Stmt> actStmts = this.createActivateStatement(b);
+			for (int i = 0; i < actStmts.size(); i++) {
+				if (i == 0) {
+					units.insertAfter(actStmts.get(i), destinationUnit);
+				} else {
+					units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+				}
+			}
+			return true;
 		} catch (Exception e) {
 			logger.error(e.getMessage());
 		}
 		return false;
 
-	}
-
-	private void recordInjectionInfo() {
-		StringBuffer sBuffer = new StringBuffer();
-		sBuffer.append("ID:");
-		sBuffer.append(this.parameters.getID());
-		for (Map.Entry<String, String> entry : this.injectInfo.entrySet()) {
-			sBuffer.append("\t");
-			sBuffer.append(entry.getKey());
-			sBuffer.append(":");
-			sBuffer.append(entry.getValue());
-		}
-		this.recorder.info(sBuffer.toString());
-	}
-
-	private List<Stmt> createActivateStatement(Body b) {
-		SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter");
-		Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
-		b.getLocals().add(writer);
-		SootMethod constructor = fWriterClass.getMethod("void <init>(java.lang.String,boolean)");
-		SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
-		SootMethod closeMethod = Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
-
-		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
-		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
-				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.txt"), IntConstant.v(1)));
-		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
-				StringConstant.v(this.parameters.getID() + "\n")));
-		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
-
-		List<Stmt> statements = new ArrayList<Stmt>();
-		statements.add(newStmt);
-		statements.add(invStmt);
-		statements.add(logStmt);
-		statements.add(closeStmt);
-		return statements;
 	}
 
 }

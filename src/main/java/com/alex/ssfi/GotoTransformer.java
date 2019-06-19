@@ -9,6 +9,7 @@ import soot.baf.DoubleWordType;
 import soot.baf.WordType;
 import soot.jimple.AddExpr;
 import soot.jimple.AssignStmt;
+import soot.jimple.BreakpointStmt;
 import soot.jimple.GotoStmt;
 import soot.jimple.InvokeExpr;
 import soot.jimple.InvokeStmt;
@@ -19,6 +20,7 @@ import soot.jimple.ReturnVoidStmt;
 import soot.jimple.StaticInvokeExpr;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
+import soot.jimple.SwitchStmt;
 import soot.jimple.toolkits.typing.fast.BottomType;
 import soot.util.*;
 
@@ -61,23 +63,55 @@ public class GotoTransformer extends BodyTransformer {
 //		}
 		
 		String methodSignature=b.getMethod().getSignature();
-		if (!methodSignature.contains("try")){
+		if (!methodSignature.contains("calculate")){
 			return;
 		}
-		Iterator<Local> locals=b.getLocals().snapshotIterator();
-		while(locals.hasNext()) {
-			Local tmp=locals.next();
-			System.out.println("tmpName: "+tmp.getName()+" tmpType: "+tmp.getType().toString());
-			if (tmp.getName().equals("flag")){
-	
-				System.out.println("RefLikeType" +(tmp.getType() instanceof RefLikeType));
-				System.out.println("AnyAubType" +(tmp.getType() instanceof AnySubType));
-				System.out.println("ArrayType" +(tmp.getType() instanceof ArrayType));
-				System.out.println("NullType" +(tmp.getType() instanceof NullType));
-				System.out.println("RefType" +(tmp.getType() instanceof RefType));
+		Chain<Unit> units=b.getUnits();
+		Iterator<Unit> stmIt=units.snapshotIterator();
+		while(stmIt.hasNext()) {
+			Stmt stmt=(Stmt)stmIt.next();
+			if (stmt instanceof SwitchStmt){
+				SwitchStmt switchStmt=(SwitchStmt)stmt;
+				List<Unit> targets=switchStmt.getTargets();
+				for (int i=0;i<targets.size();i++) {
+					System.out.println(targets.get(i).toString());
+				}
 				
+
+			}else if(stmt instanceof BreakpointStmt) {
+				System.out.println("break");
 			}
 		}
+				
+		
+//		List<SootMethod> methods=b.getMethod().getDeclaringClass().getMethods();
+//		for(int i=0;i<methods.size();i++) {
+//			Body body=methods.get(i).getActiveBody();
+//			Chain<Trap> trapChain=b.getTraps();
+//			Iterator<Trap> trapItr=trapChain.snapshotIterator();
+//			while(trapItr.hasNext()) {
+//				Trap trap=trapItr.next();
+//				System.out.println(trap.getEndUnit().toString());
+//				System.out.println(trap.getHandlerUnit().toString());
+//			}
+//			
+//		}
+//		List<SootClass> exceptions=b.getMethod().getExceptions();
+//		System.out.println(exceptions.size());
+//		Iterator<Local> locals=b.getLocals().snapshotIterator();
+//		while(locals.hasNext()) {
+//			Local tmp=locals.next();
+//			System.out.println("tmpName: "+tmp.getName()+" tmpType: "+tmp.getType().toString());
+//			if (tmp.getName().equals("flag")){
+//	
+//				System.out.println("RefLikeType" +(tmp.getType() instanceof RefLikeType));
+//				System.out.println("AnyAubType" +(tmp.getType() instanceof AnySubType));
+//				System.out.println("ArrayType" +(tmp.getType() instanceof ArrayType));
+//				System.out.println("NullType" +(tmp.getType() instanceof NullType));
+//				System.out.println("RefType" +(tmp.getType() instanceof RefType));
+//				
+//			}
+//		}
 			
 //		Chain<Unit> units=b.getUnits();
 //		Iterator<Unit> stmIt=units.snapshotIterator();

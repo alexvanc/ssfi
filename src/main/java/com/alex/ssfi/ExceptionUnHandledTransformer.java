@@ -1,8 +1,5 @@
 package com.alex.ssfi;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -14,29 +11,16 @@ import org.apache.logging.log4j.Logger;
 import com.alex.ssfi.util.RunningParameter;
 
 import soot.Body;
-import soot.BodyTransformer;
-import soot.Local;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
 import soot.SootMethod;
 import soot.Trap;
 import soot.Unit;
-import soot.jimple.AssignStmt;
-import soot.jimple.GotoStmt;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeStmt;
-import soot.jimple.Jimple;
 import soot.jimple.Stmt;
-import soot.jimple.StringConstant;
 import soot.util.Chain;
 
 //this type of fault only applies to try-catch block
-public class ExceptionUnHandledTransformer extends BodyTransformer {
-	private Map<String, String> injectInfo = new HashMap<String, String>();
-	private RunningParameter parameters;
+public class ExceptionUnHandledTransformer extends BasicTransformer {
+
 	private final Logger logger = LogManager.getLogger(ValueTransformer.class);
-	private final Logger recorder = LogManager.getLogger("inject_recorder");
 
 	public ExceptionUnHandledTransformer(RunningParameter parameters) {
 		this.parameters = parameters;
@@ -46,127 +30,155 @@ public class ExceptionUnHandledTransformer extends BodyTransformer {
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
+
+		this.methodIndex++;
 		if (this.parameters.isInjected()) {
 			return;
 		}
-		String methodSignature = b.getMethod().getName();
-		String targetMethodName = this.parameters.getMethodName();
-		if ((targetMethodName != null) && (!targetMethodName.equalsIgnoreCase(methodSignature))) {
-			return;
-		}
-		this.injectInfo.put("FaultType", "EXCEPTION_UNHANDLED_FAULT");
-		this.injectInfo.put("Package", b.getMethod().getDeclaringClass().getPackageName());
-		this.injectInfo.put("Class", b.getMethod().getDeclaringClass().getName());
-		List<String> scopes = getTargetScope(this.parameters.getVariableScope());
-
-		// choose one scope to inject faults
-		// if not specified, then randomly choose
-		while (true) {
-			int scopesSize = scopes.size();
-			if (scopesSize == 0) {
-				logger.debug("Cannot find qualified scopes");
-				break;
+		String methodName = b.getMethod().getName();
+		String methodSubSignature = b.getMethod().getSubSignature();
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
+			if (!this.foundTargetMethod) {
+				// randomly generate a target method
+				this.generateTargetMethod(b);
 			}
-			int scopeIndex = new Random().nextInt(scopesSize);
-			String scope = scopes.get(scopeIndex);
-			scopes.remove(scopeIndex);
-
-			if (this.inject(b, scope)) {
-				break;
+			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
+				this.startToInject(b);
+			} else {
+				return;
+			}
+		} else {// in the customized method mode
+			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
+				this.startToInject(b);
+			} else {
+				return;
 			}
 		}
+
+//		if (this.parameters.isInjected()) {
+//			return;
+//		}
+//		String methodSignature = b.getMethod().getName();
+//		String targetMethodName = this.parameters.getMethodName();
+//		if ((targetMethodName != null) && (!targetMethodName.equalsIgnoreCase(methodSignature))) {
+//			return;
+//		}
+//		this.injectInfo.put("FaultType", "EXCEPTION_UNHANDLED_FAULT");
+//		this.injectInfo.put("Package", b.getMethod().getDeclaringClass().getPackageName());
+//		this.injectInfo.put("Class", b.getMethod().getDeclaringClass().getName());
+//		List<String> scopes = getTargetScope(this.parameters.getVariableScope());
+//
+//		// choose one scope to inject faults
+//		// if not specified, then randomly choose
+//		while (true) {
+//			int scopesSize = scopes.size();
+//			if (scopesSize == 0) {
+//				logger.debug("Cannot find qualified scopes");
+//				break;
+//			}
+//			int scopeIndex = new Random().nextInt(scopesSize);
+//			String scope = scopes.get(scopeIndex);
+//			scopes.remove(scopeIndex);
+//
+//			if (this.inject(b, scope)) {
+//				break;
+//			}
+//		}
 
 	}
 
-	private boolean inject(Body b, String scope) {
-		try {
-			Chain<Unit> units = b.getUnits();
-			Iterator<Unit> unitItr=units.iterator();
-			Iterator<Trap> traps = b.getTraps().snapshotIterator();
-			//always choose the first catch block
-			if (traps.hasNext()) {
-				Trap tmpTrap = traps.next();
-				Unit targetUnit=tmpTrap.getHandlerUnit();
-				while(unitItr.hasNext()) {
-					Stmt stmt=(Stmt)unitItr.next();
-					if(stmt.equals(targetUnit)) {//enter the target catch block
-						while(unitItr.hasNext()) {
-							Stmt tmp=(Stmt)unitItr.next();
-							if(tmp instanceof GotoStmt) {//indicate this stmt is the end of catch block
-								List<Stmt> actStmts = this.createActivateStatement(b);
-								for (int i = 0; i < actStmts.size(); i++) {
-									if (i == 0) {
-										units.insertBefore(actStmts.get(i), tmp);
-									} else {
-										units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-									}
-								}
-								this.parameters.setInjected(true);
-								this.recordInjectionInfo();
-								return true;
-							}else {
-								units.remove(tmp);//delete the units related with processing this caught exception
-							}
-						}
-					}
-							
-				}
-				return false;
-			} else {
-				return false;
-			}
+	private void startToInject(Body b) {
+		// no matter this inject fails or succeeds, this targetMethod is already used
+		this.foundTargetMethod = false;
+		SootMethod targetMethod = b.getMethod();
+		this.injectInfo.put("FaultType", "EXCEPTION_UNHANDLED_FAULT");
+		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
+		this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());
+		this.injectInfo.put("Method", targetMethod.getSubSignature());
 
-		} catch (Exception e) {
-			logger.error(e.getMessage());
+		logger.debug("Try to inject EXCEPTION_UNHANDLED_FAULT into " + this.injectInfo.get("Package") + " "
+				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+
+		// finally perform injection
+		if (this.inject(b)) {
+			this.parameters.setInjected(true);
+			this.recordInjectionInfo();
+			logger.debug("Succeed to inject EXCEPTION_UNHANDLED_FAULT into " + this.injectInfo.get("Package") + " "
+					+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+			return;
+		} else {
+			logger.debug("Failed injection:+ " + this.formatInjectionInfo());
+		}
+
+		logger.debug("Fail to inject EXCEPTION_UNHANDLED_FAULT into " + this.injectInfo.get("Package") + " "
+				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+
+	}
+
+	private boolean inject(Body b) {
+		Chain<Unit> units = b.getUnits();
+		Chain<Trap> traps = b.getTraps();
+		if (traps.size() == 0) {
 			return false;
 		}
-	}
+		int targetTrapIndex = new Random(System.currentTimeMillis()).nextInt(traps.size());
+		Iterator<Trap> trapsItr = b.getTraps().snapshotIterator();
+		Iterator<Unit> unitsItr=units.snapshotIterator();
+		int index = 0;
+		try {
+			while (trapsItr.hasNext()) {
+				Trap tmpTrap = trapsItr.next();
+				if (index == targetTrapIndex) {
+					Unit beginUnit = tmpTrap.getHandlerUnit();
+					//we delete all the process steps after this @caughtexception stmt
+					while (unitsItr.hasNext()) {
+						Stmt stmt = (Stmt) unitsItr.next();
+						if (stmt.equals(beginUnit)) {// enter the target catch block
+							while (unitsItr.hasNext()) {
+								Stmt tmp = (Stmt) unitsItr.next();
+								//TODO check whether it satisfies all the conditions
+								if (stmt.getBoxesPointingToThis().size()!=0) {// indicate this stmt is the end of catch block
+									List<Stmt> actStmts = this.createActivateStatement(b);
+									for (int i = 0; i < actStmts.size(); i++) {
+										if (i == 0) {
+											units.insertAfter(actStmts.get(i), beginUnit);
+										} else {
+											units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+										}
+									}
+									return true;
+								} else {
+									units.remove(tmp);// delete the units related with processing this caught exception
+								}
+							}
+						}
 
-	private void recordInjectionInfo() {
-		StringBuffer sBuffer = new StringBuffer();
-		sBuffer.append("ID:");
-		sBuffer.append(this.parameters.getID());
-		for (Map.Entry<String, String> entry : this.injectInfo.entrySet()) {
-			sBuffer.append("\t");
-			sBuffer.append(entry.getKey());
-			sBuffer.append(":");
-			sBuffer.append(entry.getValue());
+					}
+
+				} else {
+					index++;
+				}
+			}
+		} catch (Exception e) {
+			logger.error(e.getMessage());
+			logger.error(this.injectInfo.toString());
+			return false;
 		}
-		this.recorder.info(sBuffer.toString());
+		return false;
 	}
 
-	private List<Stmt> createActivateStatement(Body b) {
-		SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter");
-		Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
-		b.getLocals().add(writer);
-		SootMethod constructor = fWriterClass.getMethod("void <init>(java.lang.String,boolean)");
-		SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
-		SootMethod closeMethod = Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
-
-		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
-		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
-				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.txt"), IntConstant.v(1)));
-		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
-				StringConstant.v(this.parameters.getID() + "\n")));
-		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
-
-		List<Stmt> statements = new ArrayList<Stmt>();
-		statements.add(newStmt);
-		statements.add(invStmt);
-		statements.add(logStmt);
-		statements.add(closeStmt);
-		return statements;
-	}
-
-	// this type of fault only applies to try-catch block
-	private List<String> getTargetScope(String variableScope) {
-		List<String> scopes = new ArrayList<String>();
-		if ((variableScope == null) || (variableScope == "")) {
-			scopes.add("catch");
-		} else {
-			scopes.add(variableScope);
+	private void generateTargetMethod(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		if (this.methodIndex >= allMethods.size()) {
+			return;
 		}
-		return scopes;
+		int targetMethodIndex = new Random(System.currentTimeMillis())
+				.nextInt(allMethods.size() - this.methodIndex + 1);
+
+		this.foundTargetMethod = true;
+		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
+		return;
 	}
 
 }

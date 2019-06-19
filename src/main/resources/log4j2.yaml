@@ -11,7 +11,7 @@ Configuration:
     Console:
       name: STDOUT
       PatternLayout:
-        Pattern: "%p %C{1} %m%n"
+        Pattern: "%p %C{1}:%L %m%n"
     File:
       name: File
       fileName: ${injectfile}

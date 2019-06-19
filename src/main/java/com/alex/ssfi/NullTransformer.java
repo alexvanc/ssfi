@@ -1,8 +1,6 @@
 package com.alex.ssfi;
 
-import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -15,24 +13,27 @@ import org.apache.logging.log4j.Logger;
 import com.alex.ssfi.util.RunningParameter;
 
 import soot.Body;
-import soot.BodyTransformer;
+import soot.BooleanType;
+import soot.ByteType;
+import soot.DoubleType;
+import soot.FloatType;
+import soot.IntType;
 import soot.Local;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
+import soot.LongType;
+import soot.Modifier;
+import soot.ShortType;
 import soot.SootField;
 import soot.SootMethod;
+import soot.Type;
 import soot.Unit;
 import soot.Value;
 import soot.ValueBox;
-import soot.jimple.AssignStmt;
+import soot.VoidType;
 import soot.jimple.FieldRef;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeStmt;
 import soot.jimple.Jimple;
 import soot.jimple.NullConstant;
+import soot.jimple.ReturnStmt;
 import soot.jimple.Stmt;
-import soot.jimple.StringConstant;
 import soot.util.Chain;
 
 /*
@@ -40,153 +41,179 @@ import soot.util.Chain;
  * distinguish between static field and instance field
  * decide whether to inject NullFault to the return value
  */
-public class NullTransformer extends BodyTransformer {
-	private Map<String, String> injectInfo = new HashMap<String, String>();
-	private RunningParameter parameters;
+public class NullTransformer extends BasicTransformer {
 	private final Logger logger = LogManager.getLogger(ValueTransformer.class);
-	private final Logger recorder = LogManager.getLogger("inject_recorder");
 
 	public NullTransformer(RunningParameter parameters) {
-		this.parameters = parameters;
+		super(parameters);
 
+	}
+
+	public NullTransformer() {
 	}
 
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
+
+		this.methodIndex++;
 		if (this.parameters.isInjected()) {
 			return;
 		}
-		String methodSignature = b.getMethod().getName();
-		String targetMethodName = this.parameters.getMethodName();
-		if ((targetMethodName != null) && (!targetMethodName.equalsIgnoreCase(methodSignature))) {
+		String methodName = b.getMethod().getName();
+		String methodSubSignature = b.getMethod().getSubSignature();
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
+			if (!this.foundTargetMethod) {
+				// randomly generate a target method
+				this.generateTargetMethod(b);
+			}
+			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
+				this.startToInject(b);
+			} else {
+				return;
+			}
+		} else {// in the customized method mode
+			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
+				this.startToInject(b);
+			} else {
+				return;
+			}
+		}
+
+	}
+
+	private void generateTargetMethod(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		if (this.methodIndex >= allMethods.size()) {
 			return;
 		}
-		this.injectInfo.put("FaultType", "NULL_FAULT");
-		this.injectInfo.put("Package", b.getMethod().getDeclaringClass().getPackageName());
-		this.injectInfo.put("Class", b.getMethod().getDeclaringClass().getName());
-		this.injectInfo.put("Method", b.getMethod().getSubSignature());
-		List<String> scopes = getTargetScope(this.parameters.getVariableScope());
-		Map<String, List<Object>> allVariables = this.getAllVariables(b);
+		int targetMethodIndex = new Random(System.currentTimeMillis())
+				.nextInt(allMethods.size() - this.methodIndex + 1);
+		this.foundTargetMethod = true;
+		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
+		return;
+	}
 
-		// choose one scope to inject faults
-		// if not specified, then randomly choose
+	private void startToInject(Body b) {
+		// no matter this inject fails or succeeds, this targetMethod is already used
+		this.foundTargetMethod = false;
+		SootMethod targetMethod = b.getMethod();
+		this.injectInfo.put("FaultType", "NULL_FAULT");
+		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
+		this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());
+		this.injectInfo.put("Method", targetMethod.getSubSignature());
+		List<String> scopes = getTargetScope(this.parameters.getVariableScope());
+
+		Map<String, List<Object>> allVariables = this.getAllVariables(b);
+		logger.debug("Try to inject NULL_FAULT into " + this.injectInfo.get("Package") + " "
+				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+
+		// randomly combine scope, variable
 		while (true) {
 			int scopesSize = scopes.size();
 			if (scopesSize == 0) {
 				logger.debug("Cannot find qualified scopes");
 				break;
 			}
-			int scopeIndex = new Random().nextInt(scopesSize);
+			int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);
 			String scope = scopes.get(scopeIndex);
 			scopes.remove(scopeIndex);
 			this.injectInfo.put("VariableScope", scope);
+
+			// randomly combine variable, action
+			List<Object> qualifiedVariables = this.getQualifiedVariables(b, allVariables, scope);
 			while (true) {
-				if (this.inject(b, allVariables, scope)) {
+				int variablesSize = qualifiedVariables.size();
+				if (variablesSize == 0) {
 					break;
+				}
+				int variableIndex = new Random(System.currentTimeMillis()).nextInt(variablesSize);
+				Object variable = qualifiedVariables.get(variableIndex);
+				qualifiedVariables.remove(variableIndex);
+
+				// finally perform injection
+				if (this.inject(b, scope, variable)) {
+					this.parameters.setInjected(true);
+					this.recordInjectionInfo();
+					logger.debug("Succeed to inject NULL_FAULT into " + this.injectInfo.get("Package") + " "
+							+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+					return;
+				} else {
+					logger.debug("Failed injection:+ " + this.formatInjectionInfo());
 				}
 
 			}
 
+			logger.debug("Fail to inject NULL_FAULT into " + this.injectInfo.get("Package") + " "
+					+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
 		}
+
 	}
 
-	private boolean inject(Body b, Map<String, List<Object>> allVariables, String scope) {
-		if ((scope.equals("local")) || (scope.equals("parameter"))) {
-			List<Object> source = allVariables.get(scope);
-			List<Local> target = new ArrayList<Local>();
-			for (int i = 0; i < source.size(); i++) {
-				Local local = (Local) source.get(i);
-				String targetVariableName = this.parameters.getVariableName();
-				if ((targetVariableName == null) || (targetVariableName == "")
-						|| local.getName().equals(targetVariableName)) {
-					target.add(local);
-				}
-			}
-			while (true) {
-				int variableSize = target.size();
-				if (variableSize == 0) {
-					break;
-				}
-				int variableIndex = new Random().nextInt(variableSize);
-				Local local = target.get(variableIndex);
-				target.remove(variableIndex);
-				this.injectInfo.put("VariableName", local.getName());
+	private boolean inject(Body b, String scope, Object variable) {
+		if (scope.equals("local")) {
+			if (this.injectLocalWithNull(b, (Local) variable)) {
 
-				if (this.injectLocalWithNull(b, local)) {
-					// record
-					this.recordInjectionInfo();
-					this.parameters.setInjected(true);
-					return true;
-				}
-
+				return true;
 			}
-		} else {
-			List<Object> source = allVariables.get(scope);
-			List<SootField> target = new ArrayList<SootField>();
-			for (int i = 0; i < source.size(); i++) {
-				SootField field = (SootField) source.get(i);
-				String targetVariableName = this.parameters.getVariableName();
-				if ((targetVariableName == null) || (targetVariableName == "")
-						|| field.getName().equals(targetVariableName)) {
-					target.add(field);
-				}
+		} else if (scope.equals("parameter")) {
+			// TODO
+			// currently local and parameter are processed in the same way, decide later
+			if (this.injectParameterWithNull(b, (Local) variable)) {
+	
+				return true;
 			}
-			while (true) {
-				int variableSize = target.size();
-				if (variableSize == 0) {
-					break;
-				}
-				int variableIndex = new Random().nextInt(variableSize);
-				SootField field = target.get(variableIndex);
-				target.remove(variableIndex);
-				this.injectInfo.put("VariableName", field.getName());
-				if (this.injectFieldWithNull(b, field)) {
-					// record
-					this.recordInjectionInfo();
-					this.parameters.setInjected(true);
-					return true;
+		} else if (scope.equals("field")) {
+			if (this.injectFieldWithNull(b, (SootField) variable)) {
 
-				}
+				return true;
+			}
+		} else if (scope.equals("return")) {
+			if (this.injectReturnWithNull(b, (Stmt) variable)) {
+	
+				return true;
 			}
 		}
-
 		return false;
 	}
 
 	private boolean injectFieldWithNull(Body b, SootField field) {
-		Chain<Unit> units=b.getUnits();
-		Iterator<Unit> unitIt=units.snapshotIterator();
-		while(unitIt.hasNext()) {
-			Unit tmp=unitIt.next();
-			Iterator<ValueBox> valueBoxes=tmp.getUseAndDefBoxes().iterator();
-			while(valueBoxes.hasNext()) {
-				Value value=valueBoxes.next().getValue();
-				//TODO
-				//check whether SootField in Soot is in SingleTon mode for equals comparison
-				if((value instanceof FieldRef)&&(((FieldRef)value).getField().equals(field))) {
-					logger.info(tmp.toString());
+		this.injectInfo.put("VariableName", field.getName());
+		Chain<Unit> units = b.getUnits();
+		Iterator<Unit> unitIt = units.snapshotIterator();
+		while (unitIt.hasNext()) {
+			Unit tmp = unitIt.next();
+			Iterator<ValueBox> valueBoxes = tmp.getUseAndDefBoxes().iterator();
+			while (valueBoxes.hasNext()) {
+				Value value = valueBoxes.next().getValue();
+				// TODO
+				// check whether SootField in Soot is in SingleTon mode for equals comparison
+				if ((value instanceof FieldRef) && (((FieldRef) value).getField().equals(field))) {
+					logger.debug(tmp.toString());
 					try {
-						List<Stmt> stmts=this.getFieldStatementsByNull(b,field);
-						for(int i=0;i<stmts.size();i++) {
-							if(i==0) {
-								units.insertAfter(stmts.get(i), tmp);
-							}else {
-								units.insertAfter(stmts.get(i), stmts.get(i-1));
+						List<Stmt> stmts = this.getNullFieldStatements(b, field);
+						for (int i = 0; i < stmts.size(); i++) {
+							if (i == 0) {
+								// here we add the field null to the begining of the method
+								units.insertBefore(stmts.get(i), units.getFirst());
+							} else {
+								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
-						
-						List<Stmt> actStmts=this.createActivateStatement(b);
-						for(int i=0;i<actStmts.size();i++) {
-							if(i==0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size()-1));
-							}else {
-								units.insertAfter(actStmts.get(i), actStmts.get(i-1));
+
+						List<Stmt> actStmts = this.createActivateStatement(b);
+						for (int i = 0; i < actStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+							} else {
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
 						}
 						return true;
-					}catch (Exception e) {
+					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.injectInfo.toString());
 						return false;
 					}
 
@@ -196,46 +223,60 @@ public class NullTransformer extends BodyTransformer {
 		}
 		return false;
 	}
-	private List<Stmt> getFieldStatementsByNull(Body b,SootField field) {
-		Stmt assignNullStmt=null;
-		List<Stmt> stmts=new ArrayList<Stmt>();
-	
-		assignNullStmt=Jimple.v().newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(),field.makeRef()), NullConstant.v());	
-		stmts.add(assignNullStmt);
+
+	private List<Stmt> getNullFieldStatements(Body b, SootField field) {
+		Stmt nullFieldStmt = null;
+		boolean isStaticField = false;
+		if (((field.getModifiers() & Modifier.STATIC) ^ Modifier.STATIC) == 0) {
+			isStaticField = true;
+			this.injectInfo.put("static", "true");
+		}
+
+		if (isStaticField) {
+			nullFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), NullConstant.v());
+		} else {
+			nullFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()),
+					NullConstant.v());
+		}
+
+		List<Stmt> stmts = new ArrayList<Stmt>();
+		stmts.add(nullFieldStmt);
 		return stmts;
 	}
-
 
 	private boolean injectLocalWithNull(Body b, Local local) {
-		Chain<Unit> units=b.getUnits();
-		Iterator<Unit> unitIt=units.snapshotIterator();
-		while(unitIt.hasNext()) {
-			Unit tmp=unitIt.next();
-			Iterator<ValueBox> valueBoxes=tmp.getUseAndDefBoxes().iterator();
-			while(valueBoxes.hasNext()) {
-				Value value=valueBoxes.next().getValue();
-				if((value instanceof Local)&&(value.equivTo(local))) {
-					logger.info(tmp.toString());
+		this.injectInfo.put("VariableName", local.getName());
+		logger.debug(this.formatInjectionInfo());
+		Chain<Unit> units = b.getUnits();
+		Iterator<Unit> unitIt = units.snapshotIterator();
+		while (unitIt.hasNext()) {
+			Unit tmp = unitIt.next();
+			Iterator<ValueBox> valueBoxes = tmp.getUseBoxes().iterator();
+			while (valueBoxes.hasNext()) {
+				Value value = valueBoxes.next().getValue();
+				if ((value instanceof Local) && (value.equivTo(local))) {
+					logger.debug(tmp.toString());
 					try {
-						List<Stmt> stmts=this.getLocalStatementsByNull(local);
-						for(int i=0;i<stmts.size();i++) {
-							if(i==0) {
-								units.insertAfter(stmts.get(i), tmp);
-							}else {
-								units.insertAfter(stmts.get(i), stmts.get(i-1));
+						List<Stmt> stmts = this.getNullLocalStatements(local);
+						for (int i = 0; i < stmts.size(); i++) {
+							if (i == 0) {
+								// here is the difference between local and parameter variable
+								units.insertBefore(stmts.get(i), tmp);
+							} else {
+								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
-						
-						List<Stmt> actStmts=this.createActivateStatement(b);
-						for(int i=0;i<actStmts.size();i++) {
-							if(i==0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size()-1));
-							}else {
-								units.insertAfter(actStmts.get(i), actStmts.get(i-1));
+
+						List<Stmt> actStmts = this.createActivateStatement(b);
+						for (int i = 0; i < actStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+							} else {
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
 						}
 						return true;
-					}catch (Exception e) {
+					} catch (Exception e) {
 						logger.error(e.getMessage());
 						return false;
 					}
@@ -247,49 +288,93 @@ public class NullTransformer extends BodyTransformer {
 		return false;
 	}
 
-	private List<Stmt> createActivateStatement(Body b) {
-		SootClass fWriterClass=Scene.v().getSootClass("java.io.FileWriter");
-		Local writer=Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
-		b.getLocals().add(writer);
-		SootMethod constructor=fWriterClass.getMethod("void <init>(java.lang.String,boolean)");
-		SootMethod printMethod=Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
-		SootMethod closeMethod=Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
-		
-		AssignStmt newStmt=Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
-		InvokeStmt invStmt = Jimple.v()
-				.newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(), StringConstant.v(this.parameters.getOutput()+File.separator+"activation.txt"),IntConstant.v(1)));
-		InvokeStmt logStmt=Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(), StringConstant.v(this.parameters.getID()+"\n")));
-		InvokeStmt closeStmt=Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
-
-		List<Stmt> statements=new ArrayList<Stmt>();
-		statements.add(newStmt);
-		statements.add(invStmt);
-		statements.add(logStmt);
-		statements.add(closeStmt);
-		return statements;
-	}
-
-	private List<Stmt> getLocalStatementsByNull(Local local) {
-		List<Stmt> stmts=new ArrayList<Stmt>();
-		Stmt valueChangeStmt=null;
-	
-		valueChangeStmt=Jimple.v().newAssignStmt(local, NullConstant.v());	
-		stmts.add(valueChangeStmt);
-		return stmts;
-	}
-
-	private void recordInjectionInfo() {
-		StringBuffer sBuffer = new StringBuffer();
-		sBuffer.append("ID:");
-		sBuffer.append(this.parameters.getID());
-		for (Map.Entry<String, String> entry : this.injectInfo.entrySet()) {
-			sBuffer.append("\t");
-			sBuffer.append(entry.getKey());
-			sBuffer.append(":");
-			sBuffer.append(entry.getValue());
+	private boolean injectReturnWithNull(Body b, Stmt stmt) {
+		Chain<Unit> units = b.getUnits();
+		Iterator<Unit> unitIt = units.snapshotIterator();
+		while (unitIt.hasNext()) {
+			Unit tmp = unitIt.next();
+			if (tmp.equals(stmt)) {
+				try {
+					Stmt targetStmt = (Stmt) tmp;
+					if (targetStmt instanceof ReturnStmt) {
+						Stmt nullReturnStmt = this.getNullReturnStatements();
+						units.insertAfter(nullReturnStmt, tmp);
+						List<Stmt> actStmts = this.createActivateStatement(b);
+						for (int i = 0; i < actStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(actStmts.get(i), nullReturnStmt);
+							} else {
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+							}
+						}
+						units.remove(tmp);
+					}
+				} catch (Exception e) {
+					logger.error(e.getMessage());
+					logger.error(this.injectInfo.toString());
+					return false;
+				}
+			}
 		}
-		System.out.println("HHHH");
-		this.recorder.info(sBuffer.toString());
+
+		return false;
+	}
+
+	private Stmt getNullReturnStatements() {
+		ReturnStmt returnStmt = Jimple.v().newReturnStmt(NullConstant.v());
+		return returnStmt;
+	}
+
+	private boolean injectParameterWithNull(Body b, Local local) {
+		this.injectInfo.put("VariableName", local.getName());
+		logger.debug(this.formatInjectionInfo());
+		Chain<Unit> units = b.getUnits();
+		Iterator<Unit> unitIt = units.snapshotIterator();
+		while (unitIt.hasNext()) {
+			Unit tmp = unitIt.next();
+			Iterator<ValueBox> valueBoxes = tmp.getUseBoxes().iterator();
+			while (valueBoxes.hasNext()) {
+				Value value = valueBoxes.next().getValue();
+				if ((value instanceof Local) && (value.equivTo(local))) {
+					logger.debug(tmp.toString());
+					try {
+						List<Stmt> stmts = this.getNullLocalStatements(local);
+						for (int i = 0; i < stmts.size(); i++) {
+							if (i == 0) {
+								// here is the difference between local and parameter variable
+								units.insertAfter(stmts.get(i), tmp);
+							} else {
+								units.insertAfter(stmts.get(i), stmts.get(i - 1));
+							}
+						}
+
+						List<Stmt> actStmts = this.createActivateStatement(b);
+						for (int i = 0; i < actStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+							} else {
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+							}
+						}
+						return true;
+					} catch (Exception e) {
+						logger.error(e.getMessage());
+						return false;
+					}
+
+				}
+			}
+
+		}
+		return false;
+	}
+
+	private List<Stmt> getNullLocalStatements(Local local) {
+		List<Stmt> stmts = new ArrayList<Stmt>();
+		Stmt nullLocalStmt = null;
+		nullLocalStmt = Jimple.v().newAssignStmt(local, NullConstant.v());
+		stmts.add(nullLocalStmt);
+		return stmts;
 	}
 
 	private Map<String, List<Object>> getAllVariables(Body b) {
@@ -301,10 +386,12 @@ public class NullTransformer extends BodyTransformer {
 		Chain<SootField> tmpFields = b.getMethod().getDeclaringClass().getFields();
 		List<Object> fields = new ArrayList<Object>();
 
+		List<Object> returnStmt = new ArrayList<Object>();
+
 		int i;
 		for (i = 0; i < tmpPLocals.size(); i++) {
 			Local local = tmpPLocals.get(i);
-			if (this.isTargetedType(local.getType().toString()) && (!local.getName().startsWith("$"))) {
+			if (this.isTargetedType(local.getType()) && (!local.getName().startsWith("$"))) {
 				pLocals.add(local);
 			}
 		}
@@ -313,7 +400,7 @@ public class NullTransformer extends BodyTransformer {
 		while (tmpLocalsItr.hasNext()) {
 			Local local = tmpLocalsItr.next();
 			if (!pLocals.contains(local)) {
-				if (this.isTargetedType(local.getType().toString()) && (!local.getName().startsWith("$"))) {
+				if (this.isTargetedType(local.getType()) && (!local.getName().startsWith("$"))) {
 					locals.add(local);
 				}
 			}
@@ -324,26 +411,64 @@ public class NullTransformer extends BodyTransformer {
 		Iterator<SootField> tmpFieldItr = tmpFields.iterator();
 		while (tmpFieldItr.hasNext()) {
 			SootField field = tmpFieldItr.next();
-			logger.info("Field name:　" + field.getName() + " Field type: " + field.getType().toString());
-			if (this.isTargetedType(field.getType().toString()) && (!field.getName().startsWith("$"))) {
-				fields.add(field);
+//			logger.info("Field name:　" + field.getName() + " Field type: " + field.getType().toString());
+			if (this.isTargetedType(field.getType()) && (!field.getName().startsWith("$"))) {
+				if (((field.getModifiers() & Modifier.FINAL) ^ Modifier.FINAL) == 0) {// not sure
+					// this is a final field, we cannot change value of it
+//					logger.info(field.getDeclaration());
+				} else {
+					fields.add(field);
+				}
+
 			}
 		}
+
+		// for the variable used by return
+		Type returnType = b.getMethod().getReturnType();
+		if (!(returnType instanceof VoidType)) {
+			Iterator<Unit> unitItr = b.getUnits().snapshotIterator();
+			while (unitItr.hasNext()) {
+				Unit unit = unitItr.next();
+				if (unit instanceof ReturnStmt) {
+					returnStmt.add((Stmt) unit);
+				}
+			}
+		}
+
 		result.put("parameter", pLocals);
 		result.put("local", locals);
 		result.put("field", fields);
+		result.put("return", returnStmt);
 		return result;
 	}
 
-	private boolean isTargetedType(String typeName) {
+	private boolean isTargetedType(Type type) {
 		// only non-primitive types are included
-		String[] targetTypes = { "boolean", "byte", "short", "int", "long", "float", "double", "java.lang.String" };
-		List<String> list = Arrays.asList(targetTypes);
-		if (list.contains(typeName)) {
+		if (type instanceof BooleanType) {
+			return false;
+		} else if (type instanceof ByteType) {
+			return false;
+		} else if (type instanceof ShortType) {
+			return false;
+		} else if (type instanceof IntType) {
+			return false;
+		} else if (type instanceof LongType) {
+			return false;
+		} else if (type instanceof FloatType) {
+			return false;
+		} else if (type instanceof DoubleType) {
+			return false;
+		} else if (type instanceof VoidType) {
 			return false;
 		} else {
 			return true;
 		}
+	}
+
+	private List<Object> getQualifiedVariables(Body b, Map<String, List<Object>> allVariables, String scope) {
+		// just copy list
+		List<Object> variablesInScope = allVariables.get(scope);
+		return new ArrayList<Object>(variablesInScope);
 	}
 
 	// we should decide whether choose return as a scope

@@ -10,13 +10,11 @@ import org.apache.logging.log4j.Logger;
 
 import com.alex.ssfi.util.BatchRun;
 import com.alex.ssfi.util.Configuration;
-import com.alex.ssfi.util.JobHelper;
 import com.alex.ssfi.util.RunningParameter;
 import com.alex.ssfi.util.SingleRun;
 
 import soot.BodyTransformer;
 import soot.G;
-import soot.Main;
 import soot.PackManager;
 import soot.Scene;
 import soot.SootClass;
@@ -88,7 +86,7 @@ public class InjectionManager {
     	PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", transformer) );
     	
     	try {
-    		Main.main(this.buildArgs(classWithPackage,input,output));
+    		MainWrapper.main(this.buildArgs(classWithPackage,input,output));
     		if(parameter.isInjected()) {
     			logger.debug("Succeed to inject:"+parameter.getID()+" with "+singleInjection.getType()+" into "+classWithPackage);
     			//Execute a job to observe the FI results

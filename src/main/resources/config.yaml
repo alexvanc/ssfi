@@ -4,30 +4,30 @@
   outputPath: /home/alex/work/testOutput
   
   singleRun:
-    type: Value_Fault
+    type: SWITCH_MISS_DEFAULT_FAULT
     locationPattern:
       packageP: 
-      classP: 
+      classP: WorkBench
       methodP: calculate
       variableP: 
     variableScope: 
-    variableType: long
+    variableType: int
     action: 
     targetValue: 
     
   batchRun:
-    counter: 2
+    counter: 10
     distributionMode: fix
     faultList:
     -
-       type: Value_Fault
+       type: SWITCH_MISS_DEFAULT_FAULT
        distribution: 1
        locationPattern:
-         packageP: com.oath
+         packageP: 
          classP: 
          methodP: 
        variableType: 
-       action:  
+       action: 
  #   -
  #      type: ExceptionShortCircuit
  #      distribution: 0.5
