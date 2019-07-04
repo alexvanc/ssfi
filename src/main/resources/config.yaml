@@ -1,18 +1,21 @@
 #Configuration:
-  injectionMode: batch
+  injectionMode: single
   inputPath: /home/alex/work/testInput
   outputPath: /home/alex/work/testOutput
+  debug: false
+  activationMode: always 
+  activationRate: 10
   
   singleRun:
-    type: SWITCH_MISS_DEFAULT_FAULT
+    type: ATTRIBUTE_SHADOWED_FAULT
     locationPattern:
       packageP: 
       classP: WorkBench
-      methodP: calculate
+      methodP: 
       variableP: 
-    variableScope: 
+    variableScope: catch
     variableType: int
-    action: 
+    action: field2local
     targetValue: 
     
   batchRun:
@@ -20,12 +23,12 @@
     distributionMode: fix
     faultList:
     -
-       type: SWITCH_MISS_DEFAULT_FAULT
+       type: SWITCH_FALLTHROUGH_FAULT
        distribution: 1
        locationPattern:
          packageP: 
-         classP: 
-         methodP: 
+         classP: WorkBench
+         methodP: calculate
        variableType: 
        action: 
  #   -

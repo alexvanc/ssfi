@@ -6,6 +6,8 @@ public class RunningParameter {
 //	}
 	private String ID;
 	private String output;
+	private String activationMode;
+	private int activationRate;
 	private String variableScope;
 	private String variableType;
 	private String variableName;
@@ -14,9 +16,11 @@ public class RunningParameter {
 	private String action;
 	private boolean injected=false;
 	
-	public RunningParameter(SingleRun singleRun,String output) {
+	public RunningParameter(SingleRun singleRun,String output,String activationMode,int activationRate) {
 		this.ID=IDHelper.generateID(20);
 		this.output=output;
+		this.activationMode=activationMode;
+		this.activationRate=activationRate;
 		this.methodName=singleRun.getMethodPattern();
 		this.variableScope=singleRun.getVariableScope();
 		this.variableType=singleRun.getVariableType();
@@ -62,4 +66,11 @@ public class RunningParameter {
 	public String getVariableValue() {
 		return variableValue;
 	}
+	public String getActivationMode() {
+		return activationMode;
+	}
+	public int getActivationRate() {
+		return activationRate;
+	}
+
 }

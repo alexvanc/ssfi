@@ -40,6 +40,8 @@ public class TransformerHelper {
 			return new ConditionBorderTransformer(parameter);
 		case CONDITION_INVERSED_FAULT:
 			return new ConditionInversedTransformer(parameter);
+		case ATTRIBUTE_SHADOWED_FAULT:
+			return new ShadowingAttributeTransformer(parameter);
 		default:
 			return new ReadTransformer(parameter);
 			

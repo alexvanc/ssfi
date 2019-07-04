@@ -9,6 +9,9 @@ public class Configuration {
     private String injectionMode;
     private String inputPath;
     private String outputPath;
+    private boolean debug;
+    private String activationMode="always";
+    private int activationRate=10;
     private SingleRun singleRun;
     private BatchRun batchRun;
     
@@ -68,5 +71,23 @@ public class Configuration {
     public void setBatchRun(BatchRun batchRun) {
         this.batchRun = batchRun;
     }
+	public boolean isDebug() {
+		return debug;
+	}
+	public void setDebug(boolean debug) {
+		this.debug = debug;
+	}
+	public String getActivationMode() {
+		return activationMode;
+	}
+	public void setActivationMode(String activationMode) {
+		this.activationMode = activationMode;
+	}
+	public int getActivationRate() {
+		return activationRate;
+	}
+	public void setActivationRate(int activationRate) {
+		this.activationRate = activationRate;
+	}
 
 }

@@ -1,5 +1,6 @@
 package com.alex.ssfi;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -29,37 +30,19 @@ public class InvokeRemovedTransformer extends BasicTransformer {
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
 
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
-			}
+			this.startToInject(targetMethod.getActiveBody());
 		}
-
 
 	}
 
 	private void startToInject(Body b) {
 		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "UNUSED_INVOKE_REMOVED_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
@@ -85,54 +68,106 @@ public class InvokeRemovedTransformer extends BasicTransformer {
 
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis())
-				.nextInt(allMethods.size() - this.methodIndex + 1);
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
+	}
+
+	// for this fault type,we simply assume all methods satisfy the condition
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
+
+			if (!withSpefcifiedMethod) {
+				allQualifiedMethods.add(method);
+				break;
+			} else {
+				// it's strict, only when the method satisfies the condition and with the
+				// specified name
+				if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+					allQualifiedMethods.add(method);
+					break;
+				}
+			}
+		}
+
+		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
 	private boolean inject(Body b) {
-		// actually there is only one type of action
-		// the action parameter is for future use
+
 		try {
-			Chain<Unit> units = b.getUnits();
-			Iterator<Unit> unitItr = units.iterator();
-			while (unitItr.hasNext()) {
-				Stmt stmt = (Stmt) unitItr.next();
-				// Currently we directly choose the first invokeStmt to delete
-				if (stmt instanceof InvokeStmt) {
-					InvokeStmt invStmt = (InvokeStmt) stmt;
-//					Unit nextStmt=unitItr.next();
-					List<Stmt> actStmts = this.createActivateStatement(b);
-					for (int i = 0; i < actStmts.size(); i++) {
-						if (i == 0) {
-							units.insertBefore(actStmts.get(i), invStmt);
-						} else {
-							units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-						}
-					}
-					units.remove(invStmt);
-					this.recordInjectionInfo();
-					this.parameters.setInjected(true);
+			List<Stmt> allInvokeStmts = this.getAllInvokeStmts(b);
+			while (true) {
+				int invokeStmtSize = allInvokeStmts.size();
+				if (invokeStmtSize == 0) {
+					break;
+				}
+				int stmtIndex = new Random(System.currentTimeMillis()).nextInt(invokeStmtSize);
+				Stmt targetInvokeStmt = allInvokeStmts.get(stmtIndex);
+				allInvokeStmts.remove(stmtIndex);
+				if (this.injectInvokeRemoval(b, targetInvokeStmt)) {
 					return true;
 				}
 			}
-
-			return false;
 
 		} catch (Exception e) {
 			logger.error(e.getMessage());
 			return false;
 		}
+		return false;
 	}
 
+	private boolean injectInvokeRemoval(Body b, Stmt targetStmt) {
+		Chain<Unit> units = b.getUnits();
+		Iterator<Unit> unitItr = units.iterator();
+		while (unitItr.hasNext()) {
+			Stmt stmt = (Stmt) unitItr.next();
+			if (stmt.equals(targetStmt)) {
+				List<Stmt> actStmts = this.createActivateStatement(b);
+				for (int i = 0, size = actStmts.size(); i < size; i++) {
+					if (i == 0) {
+						units.insertBefore(actStmts.get(i), stmt);
+					} else {
+						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+					}
+				}
+				units.remove(stmt);
+				break;
+			}
+		}
 
+		return true;
+	}
 
+	private List<Stmt> getAllInvokeStmts(Body b) {
+		List<Stmt> allInvokeStmts = new ArrayList<Stmt>();
+		Iterator<Unit> unitItr = b.getUnits().snapshotIterator();
+		while (unitItr.hasNext()) {
+			Unit tmpUnit = unitItr.next();
+			if (tmpUnit instanceof InvokeStmt) {
+				allInvokeStmts.add((Stmt) tmpUnit);
+			}
+
+		}
+		return allInvokeStmts;
+	}
 
 }
