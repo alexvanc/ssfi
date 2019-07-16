@@ -1,11 +1,10 @@
 #Configuration:
   injectionMode: batch
-  inputPath: /home/alex/work/testInput
-  outputPath: /home/alex/work/testOutput
+  inputPath: /work/testInput
+  outputPath: /work/testOutput
   debug: false
   activationMode: always 
   activationRate: 5
-  timeout: 15000
   
   singleRun:
     type: VALUE_FAULT

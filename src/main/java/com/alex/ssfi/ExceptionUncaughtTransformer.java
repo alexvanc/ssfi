@@ -84,19 +84,36 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 		try {
 			Chain<Unit> units = b.getUnits();
 			List<Stmt> stmts = this.getUncaughtStatments(b);
+			Unit firstUnit = units.getFirst();
 			for (int i = 0; i < stmts.size(); i++) {
 				if (i == 0) {
 					// here we add the exception before the first statement of this method
-					units.insertBefore(stmts.get(i), units.getFirst());
+					units.insertBefore(stmts.get(i), firstUnit);
 				} else {
 					units.insertAfter(stmts.get(i), stmts.get(i - 1));
+				}
+			}
+			List<Stmt> preStmts = this.getPrecheckingStmts(b);
+			for (int i = 0; i < preStmts.size(); i++) {
+				if (i == 0) {
+					units.insertBefore(preStmts.get(i), stmts.get(0));
+				} else {
+					units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+				}
+			}
+			List<Stmt> conditionStmts = this.getConditionStmt(b, firstUnit);
+			for (int i = 0; i < conditionStmts.size(); i++) {
+				if (i == 0) {
+					units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+				} else {
+					units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
 				}
 			}
 
 			List<Stmt> actStmts = this.createActivateStatement(b);
 			for (int i = 0; i < actStmts.size(); i++) {
 				if (i == 0) {
-					units.insertBefore(actStmts.get(i), stmts.get(0));
+					units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 				} else {
 					units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 				}
@@ -104,7 +121,7 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 			return true;
 		} catch (Exception e) {
 			logger.error(e.getMessage());
-			logger.error(this.injectInfo.toString());
+			logger.error(this.formatInjectionInfo());
 			return false;
 		}
 	}
@@ -140,7 +157,7 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 		return stmts;
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -169,7 +186,18 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 			boolean noExceptionDeclared = true;
 			boolean noExceptionCaught = true;
 			List<SootClass> declaredExcepts = method.getExceptions();
-			Iterator<Trap> caughtExcepts = method.getActiveBody().getTraps().snapshotIterator();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Trap> caughtExcepts = tmpBody.getTraps().snapshotIterator();
 			for (int j = 0, size = declaredExcepts.size(); j < size; j++) {
 				SootClass exception = declaredExcepts.get(j);
 				if (exception.getName().equals("java.lang.Exception")) {

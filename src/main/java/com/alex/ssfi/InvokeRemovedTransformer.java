@@ -14,7 +14,9 @@ import com.alex.ssfi.util.RunningParameter;
 import soot.Body;
 import soot.SootMethod;
 import soot.Unit;
+import soot.jimple.GotoStmt;
 import soot.jimple.InvokeStmt;
+import soot.jimple.Jimple;
 import soot.jimple.Stmt;
 import soot.util.Chain;
 
@@ -68,7 +70,7 @@ public class InvokeRemovedTransformer extends BasicTransformer {
 
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -137,22 +139,36 @@ public class InvokeRemovedTransformer extends BasicTransformer {
 
 	private boolean injectInvokeRemoval(Body b, Stmt targetStmt) {
 		Chain<Unit> units = b.getUnits();
-		Iterator<Unit> unitItr = units.iterator();
-		while (unitItr.hasNext()) {
-			Stmt stmt = (Stmt) unitItr.next();
-			if (stmt.equals(targetStmt)) {
-				List<Stmt> actStmts = this.createActivateStatement(b);
-				for (int i = 0, size = actStmts.size(); i < size; i++) {
-					if (i == 0) {
-						units.insertBefore(actStmts.get(i), stmt);
-					} else {
-						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-					}
-				}
-				units.remove(stmt);
-				break;
+		Unit nextUnit = units.getSuccOf(targetStmt);
+
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), targetStmt);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 			}
 		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> actStmts = this.createActivateStatement(b);
+		for (int i = 0; i < actStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+			} else {
+				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+			}
+		}
+
+		GotoStmt skipInvoke = Jimple.v().newGotoStmt(nextUnit);
+		units.insertAfter(skipInvoke, actStmts.get(actStmts.size() - 1));
 
 		return true;
 	}

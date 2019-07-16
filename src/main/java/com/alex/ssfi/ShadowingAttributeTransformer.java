@@ -21,6 +21,7 @@ import soot.Value;
 import soot.ValueBox;
 import soot.jimple.AssignStmt;
 import soot.jimple.FieldRef;
+import soot.jimple.GotoStmt;
 import soot.jimple.Jimple;
 import soot.jimple.Stmt;
 import soot.util.Chain;
@@ -84,7 +85,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -116,7 +117,19 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 		int length = allMethods.size();
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
-			Iterator<Local> locals = method.getActiveBody().getLocals().snapshotIterator();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				//currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Local> locals = tmpBody.getLocals().snapshotIterator();
+
 			while (locals.hasNext()) {
 				Local local = locals.next();
 				if (fieldsName.contains(local.getName())) {
@@ -179,6 +192,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 
 		} catch (Exception e) {
 			logger.error(e.getMessage());
+			logger.error(this.formatInjectionInfo());
 			return false;
 		}
 		return false;
@@ -206,12 +220,15 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 			if (stmtSize == 0) {
 				break;
 			}
+
 			int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtSize);
 			Stmt targetStmt = stmts.get(stmtIndex);
+			Unit nextUnit = units.getSuccOf(targetStmt);
 			stmts.remove(stmtIndex);
-			List<ValueBox> usedValueBoxes = targetStmt.getUseBoxes();
-			for (int i = 0, size = usedValueBoxes.size(); i < size; i++) {
-				ValueBox box = usedValueBoxes.get(i);
+			Stmt clonedStmt = (Stmt) targetStmt.clone();
+			List<ValueBox> usedValueBoxes = clonedStmt.getUseBoxes();
+			for (int j = 0, size = usedValueBoxes.size(); j < size; j++) {
+				ValueBox box = usedValueBoxes.get(j);
 				Value value = box.getValue();
 				// we assume soot adopts singleton for each local, sootfield and unit
 				if ((value instanceof Local) && (value.equals(local))) {
@@ -234,19 +251,42 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 						}
 						units.insertBefore(copyFieldToLocal, targetStmt);
 						box.setValue(fieldLocal);
-						List<Stmt> actStmts = this.createActivateStatement(b);
-						for (int j = 0, actStmtSize = actStmts.size(); j < actStmtSize; j++) {
-							if (j == 0) {
-								units.insertBefore(actStmts.get(j), targetStmt);
+						units.insertBefore(clonedStmt, targetStmt);
+
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), copyFieldToLocal);
 							} else {
-								units.insertAfter(actStmts.get(j), actStmts.get(j - 1));
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 							}
 						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
+
+						List<Stmt> actStmts = this.createActivateStatement(b);
+						for (int i = 0, actStmtSize = actStmts.size(); i < actStmtSize; i++) {
+							if (i == 0) {
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+							} else {
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+							}
+						}
+
+						GotoStmt skipInvoke = Jimple.v().newGotoStmt(nextUnit);
+						units.insertAfter(skipInvoke, clonedStmt);
 						return true;
 					}
 
 				}
 			}
+
 		}
 		return false;
 
@@ -264,24 +304,45 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 			}
 			int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtSize);
 			Stmt targetStmt = stmts.get(stmtIndex);
+			Unit nextUnit = units.getSuccOf(targetStmt);
 			stmts.remove(stmtIndex);
-			List<ValueBox> usedValueBoxes = targetStmt.getUseBoxes();
-			for (int i = 0, size = usedValueBoxes.size(); i < size; i++) {
-				ValueBox box = usedValueBoxes.get(i);
+			Stmt clonedStmt = (Stmt) targetStmt.clone();
+			List<ValueBox> usedValueBoxes = clonedStmt.getUseBoxes();
+			for (int j = 0, size = usedValueBoxes.size(); j < size; j++) {
+				ValueBox box = usedValueBoxes.get(j);
 				Value value = box.getValue();
 				// we assume soot adopts singleton for each local, sootfield and unit
 				if ((value instanceof Local) && (value.equals(fieldLocal))) {
 
 					if (box.canContainValue(local)) {
 						box.setValue(local);
-						List<Stmt> actStmts = this.createActivateStatement(b);
-						for (int j = 0, actStmtSize = actStmts.size(); j < actStmtSize; j++) {
-							if (j == 0) {
-								units.insertBefore(actStmts.get(j), targetStmt);
+						units.insertBefore(clonedStmt, targetStmt);
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), clonedStmt);
 							} else {
-								units.insertAfter(actStmts.get(j), actStmts.get(j - 1));
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 							}
 						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
+						List<Stmt> actStmts = this.createActivateStatement(b);
+						for (int i = 0, actStmtSize = actStmts.size(); i < actStmtSize; i++) {
+							if (i == 0) {
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+							} else {
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+							}
+						}
+						GotoStmt skipInvoke = Jimple.v().newGotoStmt(nextUnit);
+						units.insertAfter(skipInvoke, clonedStmt);
 						return true;
 					}
 
@@ -382,9 +443,9 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 	}
 
 	private Local getFieldLocal(Body b, SootField field) {
-		List<Local> allPossibleLocals=new ArrayList<Local>();
-		//actually a field could be assign to many different locals
-		//here we just random return one local
+		List<Local> allPossibleLocals = new ArrayList<Local>();
+		// actually a field could be assign to many different locals
+		// here we just random return one local
 		Iterator<Unit> unitItr = b.getUnits().snapshotIterator();
 		while (unitItr.hasNext()) {
 			Unit unit = unitItr.next();
@@ -396,15 +457,15 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 				if ((leftValue instanceof Local) && (rightValue instanceof FieldRef)) {
 					SootField rightField = ((FieldRef) rightValue).getField();
 					if (rightField.equals(field)) {
-						allPossibleLocals.add((Local) leftValue) ;
+						allPossibleLocals.add((Local) leftValue);
 					}
 				}
 			}
 		}
-		int size=allPossibleLocals.size();
-		if(size==0) {
+		int size = allPossibleLocals.size();
+		if (size == 0) {
 			return null;
-		}else {
+		} else {
 			return allPossibleLocals.get(new Random(System.currentTimeMillis()).nextInt(size));
 		}
 	}

@@ -92,7 +92,7 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -120,7 +120,18 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
 			List<SootClass> declaredExcepts = method.getExceptions();
-			Chain<Trap> traps = method.getActiveBody().getTraps();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Chain<Trap> traps = tmpBody.getTraps();
 			if ((declaredExcepts.size() == 0) && (traps.size() == 0)) {
 				continue;
 			}
@@ -173,7 +184,7 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 			}
 		} catch (Exception e) {
 			logger.error(e.getMessage());
-			logger.error(this.injectInfo.toString());
+			logger.error(this.formatInjectionInfo());
 			return false;
 		}
 		return false;
@@ -203,10 +214,27 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 			}
 		}
 
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), stmts.get(0));
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, beginUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+
 		List<Stmt> actStmts = this.createActivateStatement(b);
 		for (int i = 0; i < actStmts.size(); i++) {
 			if (i == 0) {
-				units.insertBefore(actStmts.get(i), stmts.get(0));
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 			} else {
 				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 			}
@@ -221,6 +249,7 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 		this.injectInfo.put("VariableName", exception.getName());
 		// Find the constructor of this Exception
 		SootMethod constructor = null;
+		SootMethod constructor2 = null;
 		Iterator<SootMethod> smIt = exception.getMethods().iterator();
 		while (smIt.hasNext()) {
 			SootMethod tmp = smIt.next();
@@ -230,19 +259,42 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 			if (signature.contains("void <init>(java.lang.String)")) {
 				constructor = tmp;
 			}
+			if (signature.contains("void <init>()")) {
+				constructor2 = tmp;
+			}
+		}
+		if ((constructor == null) && (constructor2 == null)) {
+			// this is a fatal error
+			logger.error("Failed to find a constructor for this exception");
+			return null;
 		}
 		// create a exception and initialize it
-		Local lexception = Jimple.v().newLocal("tmpException", RefType.v(exception));
-		b.getLocals().add(lexception);
-		AssignStmt assignStmt = Jimple.v().newAssignStmt(lexception, Jimple.v().newNewExpr(RefType.v(exception)));
-		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(lexception, constructor.makeRef(),
-				StringConstant.v("Fault Injection")));
-		ThrowStmt throwStmt = Jimple.v().newThrowStmt(lexception);
-		List<Stmt> stmts = new ArrayList<Stmt>();
-		stmts.add(assignStmt);
-		stmts.add(invStmt);
-		stmts.add(throwStmt);
-		return stmts;
+		if (constructor != null) {
+			Local lexception = Jimple.v().newLocal("tmpException", RefType.v(exception));
+			b.getLocals().add(lexception);
+			AssignStmt assignStmt = Jimple.v().newAssignStmt(lexception, Jimple.v().newNewExpr(RefType.v(exception)));
+			InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(lexception,
+					constructor.makeRef(), StringConstant.v("Fault Injection")));
+			ThrowStmt throwStmt = Jimple.v().newThrowStmt(lexception);
+			List<Stmt> stmts = new ArrayList<Stmt>();
+			stmts.add(assignStmt);
+			stmts.add(invStmt);
+			stmts.add(throwStmt);
+			return stmts;
+		} else {
+			Local lexception = Jimple.v().newLocal("tmpException", RefType.v(exception));
+			b.getLocals().add(lexception);
+			AssignStmt assignStmt = Jimple.v().newAssignStmt(lexception, Jimple.v().newNewExpr(RefType.v(exception)));
+			InvokeStmt invStmt = Jimple.v()
+					.newInvokeStmt(Jimple.v().newSpecialInvokeExpr(lexception, constructor2.makeRef()));
+			ThrowStmt throwStmt = Jimple.v().newThrowStmt(lexception);
+			List<Stmt> stmts = new ArrayList<Stmt>();
+			stmts.add(assignStmt);
+			stmts.add(invStmt);
+			stmts.add(throwStmt);
+			return stmts;
+		}
+
 	}
 
 	private boolean injectThrowShort(Body b, SootClass exception) {
@@ -250,19 +302,37 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 		Chain<Unit> units = b.getUnits();
 
 		this.injectInfo.put("VariableName", exception.getName());
+		Unit firstUnit = units.getFirst();
 		List<Stmt> stmts = this.getShortThrowStatements(b, exception);
 		for (int i = 0; i < stmts.size(); i++) {
 			if (i == 0) {
-				units.insertBefore(stmts.get(i), units.getFirst());
+				units.insertBefore(stmts.get(i), firstUnit);
 			} else {
 				units.insertAfter(stmts.get(i), stmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), stmts.get(0));
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, firstUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
 			}
 		}
 
 		List<Stmt> actStmts = this.createActivateStatement(b);
 		for (int i = 0; i < actStmts.size(); i++) {
 			if (i == 0) {
-				units.insertBefore(actStmts.get(i), stmts.get(0));
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 			} else {
 				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 			}

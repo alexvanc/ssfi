@@ -15,9 +15,8 @@ import soot.Body;
 import soot.SootMethod;
 import soot.Trap;
 import soot.Unit;
-import soot.jimple.CaughtExceptionRef;
 import soot.jimple.GotoStmt;
-import soot.jimple.IdentityStmt;
+import soot.jimple.Jimple;
 import soot.jimple.Stmt;
 import soot.util.Chain;
 
@@ -82,7 +81,7 @@ public class ExceptionUnHandledTransformer extends BasicTransformer {
 					return false;
 				}
 				int trapIndex = new Random(System.currentTimeMillis()).nextInt(trapSize);
-				Trap targetTrap = allTraps.get(trapSize);
+				Trap targetTrap = allTraps.get(trapIndex);
 				allTraps.remove(trapIndex);
 				if (this.injectUnhandled(b, targetTrap)) {
 					return true;
@@ -90,59 +89,59 @@ public class ExceptionUnHandledTransformer extends BasicTransformer {
 			}
 		} catch (Exception e) {
 			logger.error(e.getMessage());
-			logger.error(this.injectInfo.toString());
+			logger.error(this.formatInjectionInfo());
 			return false;
 		}
 	}
 
 	private boolean injectUnhandled(Body b, Trap trap) {
 		Chain<Unit> units = b.getUnits();
-		Iterator<Unit> unitsItr = units.snapshotIterator();
 
 		Unit beginUnit = trap.getHandlerUnit();
-		GotoStmt gTryEndUnit = (GotoStmt) trap.getEndUnit();
-		Unit outCatchUnit = gTryEndUnit.getTarget();
-		// we delete all the process steps after this @caughtexception stmt
-		while (unitsItr.hasNext()) {
-			Stmt stmt = (Stmt) unitsItr.next();
-			if (stmt.equals(beginUnit)) {// enter the target catch block
-				while (unitsItr.hasNext()) {
-					Stmt tmp = (Stmt) unitsItr.next();
-					if (tmp.equals(outCatchUnit)) {
-						// this try-catch only has one caught exception
-						// or this is the last trap
-						List<Stmt> actStmts = this.createActivateStatement(b);
-						for (int i = 0; i < actStmts.size(); i++) {
-							if (i == 0) {
-								units.insertAfter(actStmts.get(i), beginUnit);
-							} else {
-								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-							}
-						}
-						return true;
+		Unit afterBeginUnit = units.getSuccOf(beginUnit);
+		Unit endUnit = trap.getEndUnit();
 
-					} else {
-						if (tmp instanceof IdentityStmt) {
-							IdentityStmt tmpIDStmt = (IdentityStmt) tmp;
-							if (tmpIDStmt.getRightOp() instanceof CaughtExceptionRef) {
-								List<Stmt> actStmts = this.createActivateStatement(b);
-								for (int i = 0; i < actStmts.size(); i++) {
-									if (i == 0) {
-										units.insertAfter(actStmts.get(i), beginUnit);
-									} else {
-										units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-									}
-								}
-								return true;
-							}
-						}
-						units.remove(tmp);
-					}
-				}
+		// all the process steps after this @caughtexception stmt
+
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(preStmts.get(i), beginUnit);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, afterBeginUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> actStmts = this.createActivateStatement(b);
+		for (int i = 0; i < actStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+			} else {
+				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+			}
+		}
+		if (endUnit instanceof GotoStmt) {
+			GotoStmt gTryEndUnit = (GotoStmt) trap.getEndUnit();
+			Unit outCatchUnit = gTryEndUnit.getTarget();
+
+			GotoStmt skipProcess = Jimple.v().newGotoStmt(outCatchUnit);
+			units.insertAfter(skipProcess, actStmts.get(actStmts.size() - 1));
+		} else {
+			// return or return void
+			Stmt returnStmt = (Stmt) endUnit.clone();
+			units.insertAfter(returnStmt, actStmts.get(actStmts.size() - 1));
 
 		}
-		return false;
+
+		return true;
 
 	}
 
@@ -155,7 +154,7 @@ public class ExceptionUnHandledTransformer extends BasicTransformer {
 		return allTraps;
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -181,7 +180,18 @@ public class ExceptionUnHandledTransformer extends BasicTransformer {
 		int length = allMethods.size();
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
-			Chain<Trap> traps = method.getActiveBody().getTraps();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Chain<Trap> traps = tmpBody.getTraps();
 			if (traps.size() == 0) {
 				continue;
 			}

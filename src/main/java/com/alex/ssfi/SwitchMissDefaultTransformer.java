@@ -15,6 +15,7 @@ import soot.Body;
 import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.GotoStmt;
+import soot.jimple.Jimple;
 import soot.jimple.Stmt;
 import soot.jimple.SwitchStmt;
 import soot.util.Chain;
@@ -39,8 +40,6 @@ public class SwitchMissDefaultTransformer extends BasicTransformer {
 			}
 			this.startToInject(targetMethod.getActiveBody());
 		}
-
-		
 
 	}
 
@@ -93,7 +92,7 @@ public class SwitchMissDefaultTransformer extends BasicTransformer {
 		return stmts;
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -118,7 +117,18 @@ public class SwitchMissDefaultTransformer extends BasicTransformer {
 		int length = allMethods.size();
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
-			Iterator<Unit> units = method.getActiveBody().getUnits().snapshotIterator();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Unit> units = tmpBody.getUnits().snapshotIterator();
 			while (units.hasNext()) {
 				Unit unit = units.next();
 				if (unit instanceof SwitchStmt) {
@@ -145,8 +155,7 @@ public class SwitchMissDefaultTransformer extends BasicTransformer {
 		try {
 			SwitchStmt switchStmt = (SwitchStmt) stmt;
 			List<Unit> targets = switchStmt.getTargets();
-
-			Unit defaultUnit=switchStmt.getDefaultTarget();
+			Unit defaultUnit = switchStmt.getDefaultTarget();
 			// find a break target to directly go out switch block
 			boolean foundBreakTarget = false;
 			GotoStmt breakStmt = null;
@@ -164,42 +173,55 @@ public class SwitchMissDefaultTransformer extends BasicTransformer {
 				this.logger.debug(this.formatInjectionInfo());
 				return false;
 			}
-			if(breakStmt.getTarget().equals(defaultUnit)) {// there is no default block in this switch
+			if (breakStmt.getTarget().equals(defaultUnit)) {// there is no default block in this switch
 				this.logger.debug(this.formatInjectionInfo());
 				return false;
 			}
-			if (this.injectMissDefault(b, breakStmt,defaultUnit)) {
+			if (this.injectMissDefault(b, switchStmt, breakStmt, defaultUnit)) {
 				return true;
 			}
 
 		} catch (Exception e) {
 			logger.error(e.getMessage());
+			logger.error(this.formatInjectionInfo());
 		}
 		return false;
 
 	}
-	
-	private boolean injectMissDefault(Body b, GotoStmt breakDestinationStmt,Unit defaultTargetUnit) {
-		Chain<Unit> units=b.getUnits();
-		Iterator<Unit> unitItr=units.snapshotIterator();
-		while(unitItr.hasNext()) {
-			Unit tmpUnit=unitItr.next();
-			if(tmpUnit.equals(defaultTargetUnit)) {
-				Unit desertedUnit=tmpUnit;
-				while(unitItr.hasNext()&&(!desertedUnit.equals(breakDestinationStmt.getTarget()))) {
-					units.remove(desertedUnit);
-					desertedUnit=unitItr.next();
-				}
+
+	private boolean injectMissDefault(Body b, SwitchStmt switchStmt, GotoStmt breakDestinationStmt,
+			Unit defaultTargetUnit) {
+		Chain<Unit> units = b.getUnits();
+
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), defaultTargetUnit);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, defaultTargetUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
 			}
 		}
 		List<Stmt> actStmts = this.createActivateStatement(b);
 		for (int i = 0; i < actStmts.size(); i++) {
 			if (i == 0) {
-				units.insertBefore(actStmts.get(i), breakDestinationStmt.getTarget());
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 			} else {
 				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 			}
 		}
+
+		GotoStmt outCatchStmt = Jimple.v().newGotoStmt(breakDestinationStmt.getTarget());
+		units.insertAfter(outCatchStmt, actStmts.get(actStmts.size() - 1));
+		switchStmt.setDefaultTarget(preStmts.get(0));
+
 		return true;
 	}
 

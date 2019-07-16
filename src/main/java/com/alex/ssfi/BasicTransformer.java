@@ -1,14 +1,11 @@
 package com.alex.ssfi;
 
 import java.io.File;
-import java.rmi.activation.Activatable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-
-import javax.security.auth.login.FailedLoginException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -96,7 +93,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 
 		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
 		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
-				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.txt"), IntConstant.v(1)));
+				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.log"), IntConstant.v(1)));
 		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
 				StringConstant.v(this.parameters.getID() + "\n")));
 		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
@@ -106,10 +103,18 @@ public abstract class BasicTransformer extends BodyTransformer {
 		statements.add(invStmt);
 		statements.add(logStmt);
 		statements.add(closeStmt);
+		if (!this.parameters.getActivationMode().equals("always")) {
+			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			AssignStmt injectedStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(activated.makeRef()),
+					IntConstant.v(1));
+			statements.add(injectedStmt);
+		}
+
 		return statements;
 	}
 
 	protected List<Stmt> getPrecheckingStmts(Body b) {
+		this.injectInfo.put("ActivationMode", "" + this.parameters.getActivationMode());
 
 		List<Stmt> preCheckStmts = new ArrayList<Stmt>();
 		String activationMode = this.parameters.getActivationMode();
@@ -119,19 +124,35 @@ public abstract class BasicTransformer extends BodyTransformer {
 			exeCounter = new SootField("sootCounter", LongType.v(), Modifier.STATIC);
 			b.getMethod().getDeclaringClass().addField(exeCounter);
 		}
-		Local tmp = Jimple.v().newLocal("sootTmp", LongType.v());
+		Local tmp = Jimple.v().newLocal("sootTmpExeCounter", LongType.v());
 		b.getLocals().add(tmp);
 		AssignStmt copyStmt = Jimple.v().newAssignStmt(tmp, Jimple.v().newStaticFieldRef(exeCounter.makeRef()));
 		AddExpr addExpr = Jimple.v().newAddExpr(tmp, LongConstant.v(1));
 		AssignStmt addStmt = Jimple.v().newAssignStmt(tmp, addExpr);
 		AssignStmt assignStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(exeCounter.makeRef()), tmp);
+
+		// for debug
+//		Local tmpRef = Jimple.v().newLocal("tmpRef", RefType.v("java.io.PrintStream"));
+//		b.getLocals().add(tmpRef);
+//		Stmt debugCopy = Jimple.v().newAssignStmt(tmpRef, Jimple.v()
+//				.newStaticFieldRef(Scene.v().getField("<java.lang.System: java.io.PrintStream out>").makeRef()));
+//		SootMethod toCall = Scene.v().getMethod("<java.io.PrintStream: void println(long)>");
+//		Stmt printStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(tmpRef, toCall.makeRef(), tmp));
+
 		preCheckStmts.add(copyStmt);
+//		preCheckStmts.add(debugCopy);
+//		preCheckStmts.add(printStmt);
 		preCheckStmts.add(addStmt);
 		preCheckStmts.add(assignStmt);
 
 		if (activationMode.equals("always")) {
 			// only add counter
 			// done by above
+			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			if (activated == null) {
+				activated = new SootField("sootActivated", BooleanType.v(), Modifier.STATIC);
+				b.getMethod().getDeclaringClass().addField(activated);
+			}
 
 		} else if (activationMode.equals("first")) {
 			// add flag
@@ -146,7 +167,9 @@ public abstract class BasicTransformer extends BodyTransformer {
 			if (activated == null) {
 				activated = new SootField("sootActivated", BooleanType.v(), Modifier.STATIC);
 				b.getMethod().getDeclaringClass().addField(activated);
-				int targetCounter = new Random(System.currentTimeMillis()).nextInt(this.parameters.getActivationRate());
+				int targetCounter = new Random(System.currentTimeMillis()).nextInt(this.parameters.getActivationRate())
+						+ 1;
+				this.injectInfo.put("ExeIndex", "" + targetCounter);
 				exeCounter.addTag(new RandomTag(targetCounter));
 			}
 
@@ -157,41 +180,66 @@ public abstract class BasicTransformer extends BodyTransformer {
 	}
 
 	protected List<Stmt> getConditionStmt(Body b, Unit failTarget) {
-		List<Stmt> conditionStmts=new ArrayList<Stmt>();
+		List<Stmt> conditionStmts = new ArrayList<Stmt>();
 		String activationMode = this.parameters.getActivationMode();
-//		IfStmt ifStmt=null;
+		Local tmpActivated = Jimple.v().newLocal("sootActivated", BooleanType.v());
+		b.getLocals().add(tmpActivated);
 
 		if (activationMode.equals("always")) {
 			// if false, go to the default target
-			IfStmt ifStmt = Jimple.v().newIfStmt(IntConstant.v(0), failTarget);
+			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			AssignStmt copyStmt = Jimple.v().newAssignStmt(tmpActivated,
+					Jimple.v().newStaticFieldRef(activated.makeRef()));
+
+			IfStmt ifStmt = Jimple.v().newIfStmt(Jimple.v().newEqExpr(tmpActivated, IntConstant.v(1)), failTarget);
+			conditionStmts.add(copyStmt);
 			conditionStmts.add(ifStmt);
 
 		} else if (activationMode.equals("first")) {
 			// add flag
-			SootField activated=b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			Local tmpCounterRef = Jimple.v().newLocal("sootCounterRef", LongType.v());
+			b.getLocals().add(tmpCounterRef);
+			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			AssignStmt copyStmt1 = Jimple.v().newAssignStmt(tmpActivated,
+					Jimple.v().newStaticFieldRef(activated.makeRef()));
+
 			SootField exeCounter = b.getMethod().getDeclaringClass().getFieldUnsafe("sootCounter", LongType.v());
-			IfStmt ifStmt2 = Jimple.v().newIfStmt(
-					Jimple.v().newNeExpr(Jimple.v().newStaticFieldRef(exeCounter.makeRef()), LongConstant.v(1)),
-					failTarget);	
-			//if already activated, directly go to the default target unit
-			IfStmt ifStmt1=Jimple.v().newIfStmt(Jimple.v().newStaticFieldRef(activated.makeRef()), failTarget);
+			AssignStmt copyStmt2 = Jimple.v().newAssignStmt(tmpCounterRef,
+					Jimple.v().newStaticFieldRef(exeCounter.makeRef()));
+			IfStmt ifStmt2 = Jimple.v().newIfStmt(Jimple.v().newNeExpr(tmpCounterRef, LongConstant.v(1)), failTarget);
+			// if already activated, directly go to the default target unit
+			IfStmt ifStmt1 = Jimple.v().newIfStmt(Jimple.v().newEqExpr(tmpActivated, IntConstant.v(1)), failTarget);
+			conditionStmts.add(copyStmt1);
+			conditionStmts.add(copyStmt2);
 			conditionStmts.add(ifStmt1);
 			conditionStmts.add(ifStmt2);
 
 		} else if (activationMode.equals("random")) {
+			Local tmpCounterRef = Jimple.v().newLocal("sootCounterRef", LongType.v());
+			b.getLocals().add(tmpCounterRef);
+			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			AssignStmt copyStmt1 = Jimple.v().newAssignStmt(tmpActivated,
+					Jimple.v().newStaticFieldRef(activated.makeRef()));
 			SootField exeCounter = b.getMethod().getDeclaringClass().getFieldUnsafe("sootCounter", LongType.v());
-			SootField activated=b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			AssignStmt copyStmt2 = Jimple.v().newAssignStmt(tmpCounterRef,
+					Jimple.v().newStaticFieldRef(exeCounter.makeRef()));
 
 			RandomTag randomTag = (RandomTag) exeCounter.getTag("sootTargetCounter");
 			long targetCounter = randomTag.getTargetCounter();
-			IfStmt ifStmt2 = Jimple.v().newIfStmt(Jimple.v().newNeExpr(
-					Jimple.v().newStaticFieldRef(exeCounter.makeRef()), LongConstant.v(targetCounter)), failTarget);
-			IfStmt ifStmt1=Jimple.v().newIfStmt(Jimple.v().newStaticFieldRef(activated.makeRef()), failTarget);
+			IfStmt ifStmt2 = Jimple.v().newIfStmt(Jimple.v().newNeExpr(tmpCounterRef, LongConstant.v(targetCounter)),
+					failTarget);
+			IfStmt ifStmt1 = Jimple.v().newIfStmt(Jimple.v().newEqExpr(tmpActivated, IntConstant.v(1)), failTarget);
+
+			conditionStmts.add(copyStmt1);
+
+			conditionStmts.add(copyStmt2);
 			conditionStmts.add(ifStmt1);
 			conditionStmts.add(ifStmt2);
 
 		}
 		return conditionStmts;
 	}
+	
+	
 
 }

@@ -116,7 +116,7 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 		return actions;
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -141,7 +141,18 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 		int length = allMethods.size();
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
-			Iterator<Unit> units = method.getActiveBody().getUnits().snapshotIterator();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				//currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Unit> units = tmpBody.getUnits().snapshotIterator();
 			while (units.hasNext()) {
 				Unit unit = units.next();
 				if (unit instanceof SwitchStmt) {
@@ -255,16 +266,34 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 		// TODO Auto-generated method stub
 		Chain<Unit> units = b.getUnits();
 		Unit breakStmt = units.getPredOf(nextTargetUnit);
+		
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), breakStmt);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, breakStmt);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
 
 		List<Stmt> actStmts = this.createActivateStatement(b);
 		for (int i = 0; i < actStmts.size(); i++) {
 			if (i == 0) {
-				units.insertBefore(actStmts.get(i), breakStmt);
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size()-1));
 			} else {
 				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 			}
 		}
-		units.remove(breakStmt);
+		GotoStmt skipIfStmt=Jimple.v().newGotoStmt(nextTargetUnit);
+		units.insertAfter(skipIfStmt, actStmts.get(actStmts.size()-1));
 		return true;
 
 	}
@@ -272,18 +301,36 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 	// add a break stmt between two cases without a break stmt
 	private boolean injectSwitchBreak(Body b, Unit nextTargetUnit, Unit breakUnit) {
 		Chain<Unit> units = b.getUnits();
-
-		GotoStmt oriBreakStmt = (GotoStmt) breakUnit;
-		GotoStmt breakStmt = Jimple.v().newGotoStmt(oriBreakStmt.getTarget());
-		units.insertBefore(breakStmt, nextTargetUnit);
+		
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), nextTargetUnit);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, nextTargetUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
 		List<Stmt> actStmts = this.createActivateStatement(b);
 		for (int i = 0; i < actStmts.size(); i++) {
 			if (i == 0) {
-				units.insertBefore(actStmts.get(i), breakStmt);
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size()-1));
 			} else {
 				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 			}
 		}
+
+		GotoStmt oriBreakStmt = (GotoStmt) breakUnit;
+		GotoStmt breakStmt = Jimple.v().newGotoStmt(oriBreakStmt.getTarget());
+		units.insertAfter(breakStmt, actStmts.get(actStmts.size()-1));
+		
 		return true;
 
 	}

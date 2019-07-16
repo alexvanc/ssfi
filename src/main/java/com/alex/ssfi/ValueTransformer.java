@@ -47,7 +47,6 @@ import soot.util.Chain;
 public class ValueTransformer extends BasicTransformer {
 
 	private final Logger logger = LogManager.getLogger(ValueTransformer.class);
-	
 
 	public ValueTransformer(RunningParameter parameters) {
 		super(parameters);
@@ -67,7 +66,17 @@ public class ValueTransformer extends BasicTransformer {
 			if (targetMethod == null) {
 				return;
 			}
-			this.startToInject(targetMethod.getActiveBody());
+			Body tmpBody;
+			try {
+				tmpBody = targetMethod.retrieveActiveBody();
+			} catch (Exception e) {
+				logger.info("Retrieve Active Body Failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			this.startToInject(tmpBody);
 		}
 
 	}
@@ -127,6 +136,7 @@ public class ValueTransformer extends BasicTransformer {
 						int actionIndex = new Random(System.currentTimeMillis()).nextInt(actionSize);
 						String action = possibleActions.get(actionIndex);
 						possibleActions.remove(actionIndex);
+						this.injectInfo.put("Action", action);
 						// finally perform injection
 						if (this.inject(b, scope, variable, action)) {
 							this.parameters.setInjected(true);
@@ -237,7 +247,7 @@ public class ValueTransformer extends BasicTransformer {
 		return qualifiedVariables;
 	}
 
-	private SootMethod generateTargetMethod(Body b) {
+	private synchronized SootMethod generateTargetMethod(Body b) {
 		if (this.allQualifiedMethods == null) {
 			this.initAllQualifiedMethods(b);
 		}
@@ -246,6 +256,7 @@ public class ValueTransformer extends BasicTransformer {
 			return null;
 		}
 		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+
 		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
 		this.allQualifiedMethods.remove(randomMethodIndex);
 		return targetMethod;
@@ -301,11 +312,27 @@ public class ValueTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -313,6 +340,7 @@ public class ValueTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -336,6 +364,7 @@ public class ValueTransformer extends BasicTransformer {
 				Value value = valueBoxes.next().getValue();
 				if ((value instanceof Local) && (value.equivTo(local))) {
 					logger.debug(tmp.toString());
+					Unit nextUnit = units.getSuccOf(tmp);
 					try {
 						List<Stmt> stmts = this.getLocalStatementsByAction(local, action);
 						for (int i = 0; i < stmts.size(); i++) {
@@ -345,11 +374,27 @@ public class ValueTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, nextUnit);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -357,6 +402,7 @@ public class ValueTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -372,7 +418,10 @@ public class ValueTransformer extends BasicTransformer {
 		if (action.equals("TO")) {
 			String typeName = local.getType().toString();
 			String targetStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", targetStringValue);
+			if (targetStringValue != null) {
+				this.injectInfo.put("VariableValue", targetStringValue);
+			}
+
 			if (typeName.equals("byte")) {
 				byte result = Byte.parseByte(targetStringValue);
 				valueChangeStmt = Jimple.v().newAssignStmt(local, IntConstant.v(result));
@@ -405,7 +454,9 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("ADD")) {
 			String typeName = local.getType().toString();
 			String addedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", addedStringValue);
+			if (addedStringValue != null) {
+				this.injectInfo.put("VariableValue", addedStringValue);
+			}
 			if (typeName.equals("byte")) {
 				byte addedValue = 1;
 				if ((addedStringValue != null) && (addedStringValue != "")) {
@@ -458,7 +509,10 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("SUB")) {
 			String typeName = local.getType().toString();
 			String subedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", subedStringValue);
+			if (subedStringValue != null) {
+				this.injectInfo.put("VariableValue", subedStringValue);
+			}
+
 			if (typeName.equals("byte")) {
 				byte addedValue = 1;
 				if ((subedStringValue != null) && (subedStringValue != "")) {
@@ -530,7 +584,10 @@ public class ValueTransformer extends BasicTransformer {
 		if (action.equals("TO")) {
 			String typeName = field.getType().toString();
 			String targetStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", targetStringValue);
+			if (targetStringValue != null) {
+				this.injectInfo.put("VariableValue", targetStringValue);
+			}
+
 			if (typeName.equals("byte")) {
 //				
 				byte result = Byte.parseByte(targetStringValue);
@@ -611,7 +668,9 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("ADD")) {
 			String typeName = field.getType().toString();
 			String addedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", addedStringValue);
+			if (addedStringValue != null) {
+				this.injectInfo.put("VariableValue", addedStringValue);
+			}
 			if (typeName.equals("byte")) {
 				byte addedValue = 1;
 				if ((addedStringValue != null) && (addedStringValue != "")) {
@@ -741,7 +800,9 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("SUB")) {
 			String typeName = field.getType().toString();
 			String subedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", subedStringValue);
+			if (subedStringValue != null) {
+				this.injectInfo.put("VariableValue", subedStringValue);
+			}
 			if (typeName.equals("byte")) {
 				byte subededValue = 1;
 				if ((subedStringValue != null) && (subedStringValue != "")) {
@@ -889,11 +950,27 @@ public class ValueTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -901,7 +978,7 @@ public class ValueTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
-						logger.error(this.injectInfo.toString());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 

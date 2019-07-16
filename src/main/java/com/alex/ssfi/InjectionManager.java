@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.alex.ssfi.util.BatchRun;
 import com.alex.ssfi.util.Configuration;
+import com.alex.ssfi.util.JobHelper;
 import com.alex.ssfi.util.RunningParameter;
 import com.alex.ssfi.util.SingleRun;
 
@@ -26,6 +27,7 @@ public class InjectionManager {
 
 	private static InjectionManager instance = new InjectionManager();
 	private boolean debugMode = false;
+	private long jobTimeoutValue;
 
 	private InjectionManager() {
 	}
@@ -36,19 +38,21 @@ public class InjectionManager {
 
 	public void peformInjection(Configuration config) {
 		this.debugMode = config.isDebug();
+		this.jobTimeoutValue = config.getTimeout();
 		if (config.getInjectionMode().equals("batch")) {
 			logger.info("In Batch mode");
 
 			this.performBatchInjection(config.getBatchRun(), config.getInputPath(), config.getOutputPath(),
-					config.getActivationMode(),config.getActivationRate());
+					config.getActivationMode(), config.getActivationRate());
 		} else {
 			logger.info("In Single mode");
 			this.performSingleInjection(config.getSingleRun(), config.getInputPath(), config.getOutputPath(),
-					config.getActivationMode(),config.getActivationRate());
+					config.getActivationMode(), config.getActivationRate());
 		}
 	}
 
-	private void performSingleInjection(SingleRun singleInjection, String input, String ouput, String activationMode,int activationRate) {
+	private void performSingleInjection(SingleRun singleInjection, String input, String ouput, String activationMode,
+			int activationRate) {
 
 		List<String> allClassName;
 		allClassName = this.getFullClassName(input, singleInjection.getPackagePattern(),
@@ -88,7 +92,8 @@ public class InjectionManager {
 		Scene.v().addBasicClass("java.io.FileWriter", SootClass.SIGNATURES);
 		Scene.v().addBasicClass("java.io.Writer", SootClass.SIGNATURES);
 		Scene.v().addBasicClass("java.io.OutputStreamWriter", SootClass.SIGNATURES);
-		RunningParameter parameter = new RunningParameter(singleInjection, output, activationMode,activationRate);
+//		Scene.v().loadNecessaryClasses();
+		RunningParameter parameter = new RunningParameter(singleInjection, output, activationMode, activationRate);
 		logger.debug("Start to inject: " + parameter.getID() + " with " + singleInjection.getType() + " into "
 				+ classWithPackage);
 		BodyTransformer transformer = TransformerHelper.getTransformer(singleInjection.getType(), parameter);
@@ -100,7 +105,7 @@ public class InjectionManager {
 				logger.debug("Succeed to inject:" + parameter.getID() + " with " + singleInjection.getType() + " into "
 						+ classWithPackage);
 				// Execute a job to observe the FI results
-				// JobHelper.run(parameter.getID(),classWithPackage,input,output);
+				JobHelper.runJob(parameter.getID(), classWithPackage, input, output, this.jobTimeoutValue);
 				return true;
 			} else {
 				logger.debug("Failed to inject:" + parameter.getID() + " with " + singleInjection.getType() + " into "
@@ -199,7 +204,8 @@ public class InjectionManager {
 
 	}
 
-	private void performBatchInjection(BatchRun batchInjection, String input, String ouput, String activationMode,int activationRate) {
+	private void performBatchInjection(BatchRun batchInjection, String input, String ouput, String activationMode,
+			int activationRate) {
 		List<SingleRun> allRuns = batchInjection.getFaultList();
 
 		String distributionMode = batchInjection.getDistributionMode();
@@ -209,7 +215,7 @@ public class InjectionManager {
 			logger.debug("Random distribution: " + injectionNumber.toString());
 			for (int i = 0; i < allRuns.size(); i++) {
 				for (int j = 0; j < injectionNumber[i]; i++) {
-					this.performSingleInjection(allRuns.get(i), input, ouput, activationMode,activationRate);
+					this.performSingleInjection(allRuns.get(i), input, ouput, activationMode, activationRate);
 				}
 			}
 		} else {// in the fixed distribution mode
@@ -217,7 +223,7 @@ public class InjectionManager {
 				SingleRun singleRun = allRuns.get(i);
 				int injectionNumber = (int) (batchInjection.getCounter() * singleRun.getDistribution());
 				for (int j = 0; j < injectionNumber; j++) {
-					this.performSingleInjection(singleRun, input, ouput, activationMode,activationRate);
+					this.performSingleInjection(singleRun, input, ouput, activationMode, activationRate);
 				}
 			}
 		}

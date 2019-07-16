@@ -26,7 +26,7 @@ Configuration:
     logger:
       -
         name: com.alex.ssfi
-        level: debug
+        level: info
         additivity: false
         AppenderRef:
           ref: STDOUT

@@ -4,3 +4,6 @@
 .git/
 .project
 .DS_Store
+*.jar
+nohup.out
+config.yaml.*
