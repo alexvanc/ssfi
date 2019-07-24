@@ -42,7 +42,6 @@ public abstract class BasicTransformer extends BodyTransformer {
 
 	public BasicTransformer(RunningParameter parameters) {
 		this.parameters = parameters;
-
 	}
 
 	public BasicTransformer() {
@@ -55,6 +54,8 @@ public abstract class BasicTransformer extends BodyTransformer {
 	}
 
 	protected void recordInjectionInfo() {
+		this.injectInfo.put("ComponentName", this.parameters.getComponentName());
+		this.injectInfo.put("JarName", this.parameters.getJarName());
 		StringBuffer sBuffer = new StringBuffer();
 		sBuffer.append("ID:");
 		sBuffer.append(this.parameters.getID());
@@ -239,7 +240,5 @@ public abstract class BasicTransformer extends BodyTransformer {
 		}
 		return conditionStmts;
 	}
-	
-	
 
 }

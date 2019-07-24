@@ -9,6 +9,8 @@ public class Configuration {
 	private String injectionMode;
 	private String inputPath;
 	private String outputPath;
+	private String component;
+	private String jarName;
 	private boolean debug;
 	private String activationMode = "always";
 	private int activationRate = 10;
@@ -116,6 +118,22 @@ public class Configuration {
 
 	public void setTimeout(long timeout) {
 		this.timeout = timeout;
+	}
+
+	public String getComponent() {
+		return component;
+	}
+
+	public void setComponent(String component) {
+		this.component = component;
+	}
+
+	public String getJarName() {
+		return jarName;
+	}
+
+	public void setJarName(String jarName) {
+		this.jarName = jarName;
 	}
 
 }

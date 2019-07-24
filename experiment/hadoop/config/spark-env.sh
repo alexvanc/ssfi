@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export JAVA_HOME=/docker-java-home
 export SPARK_MASTER_IP=hadoop-master
 export HADOOP_HOME=/usr/local/hadoop
 export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop

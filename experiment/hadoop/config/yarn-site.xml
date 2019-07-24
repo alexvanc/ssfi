@@ -10,7 +10,7 @@
     </property>
     <property>
         <name>yarn.resourcemanager.hostname</name>
-        <value>hadoop-master</value>
+        <value>localhost</value>
     </property>
     <property>
     	<name>yarn.nodemanager.pmem-check-enabled</name>

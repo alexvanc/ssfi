@@ -1,52 +1,80 @@
-FROM ubuntu:16.04
+#this is the Dockerfile only for hadoop
+#without tracing complied and enabled
+#without message ID tracing enabled
+#without Hadoop tracing enabled
 
-WORKDIR /root
+FROM rappdw/docker-java-python:latest
 
-#RUN echo "nameserver 8.8.8.8" | tee /etc/resolv.conf > /dev/null
+# install openssh-server, wget and gcc and other dependencies of tracing
+RUN apt-get update && apt-get install -y openssh-server wget vim uuid-dev libconfig-dev libcurl4-openssl-dev build-essential python-mysqldb
 
-# install openssh-server, openjdk, wget and gcc
-RUN apt-get update && apt-get install -y openssh-server openjdk-8-jdk wget vim uuid-dev libcurl4-openssl-dev build-essential
+RUN mkdir -p /work/hadoop && mkdir -p /work/spark && mkdir /work/spark/spark-output 
+COPY *.sh *.py /work/spark/spark-output/
+
+WORKDIR /work/hadoop
 
 # install hadoop 2.6.5
 RUN wget http://mirrors.tuna.tsinghua.edu.cn/apache/hadoop/common/hadoop-2.6.5/hadoop-2.6.5.tar.gz && \
     tar -xzvf hadoop-2.6.5.tar.gz && \
     mv hadoop-2.6.5 /usr/local/hadoop && \
     rm hadoop-2.6.5.tar.gz
+  
+WORKDIR /work/spark  
+#RUN wget https://archive.apache.org/dist/spark/spark-2.3.1/spark-2.3.1-bin-hadoop2.6.tgz && \
+COPY spark-2.3.1-bin-hadoop2.6.tgz /work/spark/
+RUN	tar -xzvf spark-2.3.1-bin-hadoop2.6.tgz && \
+    mv spark-2.3.1-bin-hadoop2.6 /usr/local/spark && \
+    rm /work/spark/spark-2.3.1-bin-hadoop2.6.tgz 
+
 
 # set environment variable
-ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 ENV HADOOP_HOME=/usr/local/hadoop
+ENV SPARK_HOME=/usr/local/spark
 ENV PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
 
-# ssh without key
-RUN ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' && \
-    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+WORKDIR /work/hadoop
+RUN mkdir -p hdfs/namenode && \
+    mkdir -p hdfs/datanode && \
+    mkdir -p /tmp/hadoop/klogs && mkdir /tmp/hadoop/logs && \
+    mkdir -p /tmp/spark/klogs && mkdir /tmp/spark/logs
 
-RUN mkdir -p ~/hdfs/namenode && \
-    mkdir -p ~/hdfs/datanode && \
-    mkdir $HADOOP_HOME/logs
-
+#config hadoop cluster
 COPY config/* /tmp/
 
-RUN mv /tmp/ssh_config ~/.ssh/config && \
+#hadoop-env.sh --- for JAVA_HOME
+#hadoop-config.sh --- for tracing
+#*.xml for cluster cofig
+#mapred-site.xml and hadoop-daemon.sh and yarn-daemon.sh for logging
+#log4j.properties for security logs level
+RUN mkdir ~/.ssh && mv /tmp/ssh_config ~/.ssh/config && \
     mv /tmp/hadoop-env.sh $HADOOP_HOME/etc/hadoop/hadoop-env.sh && \
     mv /tmp/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml && \
     mv /tmp/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml && \
     mv /tmp/mapred-site.xml $HADOOP_HOME/etc/hadoop/mapred-site.xml && \
     mv /tmp/yarn-site.xml $HADOOP_HOME/etc/hadoop/yarn-site.xml && \
-    mv /tmp/hadoop-config.sh $HADOOP_HOME/libexec/hadoop-config.sh && \
+    mv /tmp/hadoop-config-notrace.sh $HADOOP_HOME/libexec/hadoop-config.sh && \
+    mv /tmp/yarn-daemon.sh $HADOOP_HOME/sbin/yarn-daemon.sh && \
+    mv /tmp/hadoop-daemon.sh $HADOOP_HOME/sbin/hadoop-daemon.sh && \
+    mv /tmp/log4j.properties $HADOOP_HOME/etc/hadoop/log4j.properties && \
+    mv /tmp/log4j.properties.spark $SPARK_HOME/conf/log4j.properties && \
     cp /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
+    mv /tmp/slaves $SPARK_HOME/conf/slaves && \
+    mv /tmp/spark-env.sh $SPARK_HOME/conf/spark-env.sh && \
+    mv /tmp/spark-defaults.conf $SPARK_HOME/conf/spark-defaults.conf && \
     mv /tmp/start-*.sh ~/ && \
     mv /tmp/run-*.sh ~/ && \
-    mv /tmp/sysctl.conf /etc/sysctl.conf
-
+    mv /tmp/sysctl.conf /etc/sysctl.conf && \
+    mv /tmp/init.sh /work/
+    
 RUN chmod +x ~/start-hadoop.sh && \
-    chmod +x ~/run-wordcount.sh && \
+    chmod +x ~/*.sh && \
     chmod +x $HADOOP_HOME/sbin/start-dfs.sh && \
     chmod +x $HADOOP_HOME/sbin/start-yarn.sh && \
-    sysctl -p
+    chmod +x /work/init.sh
 
-# format namenode
-RUN /usr/local/hadoop/bin/hdfs namenode -format
+COPY ssfi.jar /work/
+COPY spark.tar.bz /tmp/
+RUN tar  -C /work/spark -xjf /tmp/spark.tar.bz
 
-CMD [ "sh", "-c", "service ssh start; bash"]
+
+CMD [ "sh", "-c", "/work/init.sh; /bin/bash"]

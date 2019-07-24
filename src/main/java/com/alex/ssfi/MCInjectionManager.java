@@ -21,24 +21,28 @@ import soot.Scene;
 import soot.SootClass;
 import soot.Transform;
 
-public class InjectionManager {
+//mainly for Hadoop injection experiments
+public class MCInjectionManager {
 	private static final Logger logger = LogManager.getLogger(InjectionManager.class);
 //	private static final Logger recorder=LogManager.getLogger("inject_recorder");
 
-	private static InjectionManager instance = new InjectionManager();
+	private static MCInjectionManager instance = new MCInjectionManager();
 	private boolean debugMode = false;
 	private long jobTimeoutValue;
+	private String targetComponent;
+	private String targetJar;
 
-	private InjectionManager() {
+	private MCInjectionManager() {
 	}
 
-	public static InjectionManager getManager() {
+	public static MCInjectionManager getManager() {
 		return instance;
 	}
 
 	public void peformInjection(Configuration config) {
 		this.debugMode = config.isDebug();
 		this.jobTimeoutValue = config.getTimeout();
+		this.targetComponent = config.getComponent();
 		if (config.getInjectionMode().equals("batch")) {
 			logger.info("In Batch mode");
 
@@ -54,58 +58,86 @@ public class InjectionManager {
 	private void performSingleInjection(SingleRun singleInjection, String input, String ouput, String activationMode,
 			int activationRate) {
 
-		List<String> allClassName;
-		allClassName = this.getFullClassName(input, singleInjection.getPackagePattern(),
-				singleInjection.getClassPattern());
-
-		if ((allClassName == null) || allClassName.size() == 0) {
-			logger.error("Failed to find a posssible targeting class file!");
-			// generate unqualified report
-			return;
-		}
-		logger.debug("Prepare to inject one fault with possible classes number" + allClassName.size());
+		List<String> allComponents = this.getAllComponents(input, this.targetComponent);
 		while (true) {
-			int length = allClassName.size();
+			int length = allComponents.size();
 			if (length == 0) {
 				// generate unqualified report
 				logger.debug("Failed to inject one fault");
 				return;
 			}
 			int index = new Random().nextInt(length);
+			String componentName = allComponents.get(index);
+			allComponents.remove(index);
+			List<String> allJarFolders = this.getAllJarFiles(input, componentName, this.targetJar);
+			while (true) {
+				int jarLength = allJarFolders.size();
+				if (jarLength == 0) {
+					break;
+				}
+				int jarIndex = new Random().nextInt(jarLength);
+				String jarName = allJarFolders.get(jarIndex);
+				allJarFolders.remove(jarIndex);
+				String finalInput = input + File.separatorChar + componentName + File.separatorChar + jarName;
+				List<String> allClassName;
+				allClassName = this.getFullClassName(finalInput, singleInjection.getPackagePattern(),
+						singleInjection.getClassPattern());
 
-			String targetPath = allClassName.get(index);
-			allClassName.remove(index);
-			int start = targetPath.indexOf(input) + input.length() + 1;
-			int end = targetPath.indexOf(".class");
-			String classWithPackge = targetPath.substring(start, end).replace(File.separatorChar, '.');
-//			System.out.println(start+" "+classWithPackge);
-			if (this.injectFault(singleInjection, classWithPackge, input, ouput, activationMode, activationRate)) {
-				logger.debug("Succeed to inject one fault");
-				return;
+				if ((allClassName == null) || allClassName.size() == 0) {
+					logger.error("Failed to find a posssible targeting class file!");
+					// generate unqualified report
+					continue;
+				}
+				logger.debug("Prepare to inject one fault with possible classes number" + allClassName.size());
+				while (true) {
+					int classLength = allClassName.size();
+					if (classLength == 0) {
+						// generate unqualified report
+						logger.debug("Failed to inject one fault");
+						break;
+					}
+					int classIndex = new Random().nextInt(classLength);
+
+					String targetPath = allClassName.get(classIndex);
+					allClassName.remove(classIndex);
+					int start = targetPath.indexOf(finalInput) + finalInput.length() + 1;
+					int end = targetPath.indexOf(".class");
+					String classWithPackge = targetPath.substring(start, end).replace(File.separatorChar, '.');
+//					System.out.println(start+" "+classWithPackge);
+					if (this.injectFault(singleInjection, classWithPackge, input, componentName, jarName, ouput,
+							activationMode, activationRate)) {
+						logger.info("Succeed to inject one fault");
+						logger.info(classWithPackge);
+						return;
+					}
+				}
 			}
+
 		}
 
 	}
 
-	private boolean injectFault(SingleRun singleInjection, String classWithPackage, String input, String output,
-			String activationMode, int activationRate) {
+	private boolean injectFault(SingleRun singleInjection, String classWithPackage, String input, String componentName,
+			String jarName, String output, String activationMode, int activationRate) {
 		Scene.v().addBasicClass("java.io.FileWriter", SootClass.SIGNATURES);
 		Scene.v().addBasicClass("java.io.Writer", SootClass.SIGNATURES);
 		Scene.v().addBasicClass("java.io.OutputStreamWriter", SootClass.SIGNATURES);
 //		Scene.v().loadNecessaryClasses();
-		RunningParameter parameter = new RunningParameter(singleInjection, output, activationMode, activationRate);
+		RunningParameter parameter = new RunningParameter(singleInjection, componentName, jarName, output,
+				activationMode, activationRate);
 		logger.debug("Start to inject: " + parameter.getID() + " with " + singleInjection.getType() + " into "
 				+ classWithPackage);
 		BodyTransformer transformer = TransformerHelper.getTransformer(singleInjection.getType(), parameter);
 		PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", transformer));
-
+		String finalInput = input + File.separatorChar + componentName + File.separatorChar + jarName;
 		try {
-			MainWrapper.main(this.buildArgs(classWithPackage, input, output));
+			MainWrapper.main(this.buildArgs(classWithPackage, finalInput, output));
 			if (parameter.isInjected()) {
 				logger.debug("Succeed to inject:" + parameter.getID() + " with " + singleInjection.getType() + " into "
 						+ classWithPackage);
 				// Execute a job to observe the FI results
-				JobHelper.runJob(parameter.getID(), classWithPackage, input, output, this.jobTimeoutValue);
+				JobHelper.runJob(parameter.getID(), classWithPackage, input, componentName, jarName, output,
+						this.jobTimeoutValue);
 				return true;
 			} else {
 				logger.debug("Failed to inject:" + parameter.getID() + " with " + singleInjection.getType() + " into "
@@ -156,6 +188,51 @@ public class InjectionManager {
 		}
 
 		return args;
+	}
+
+	private List<String> getAllComponents(String input, String targetComponent) {
+		// TODO Auto-generated method stub
+		List<String> allComponents = new ArrayList<String>();
+		File projectFolder = new File(input);
+		if ((!projectFolder.exists()) || (!projectFolder.isDirectory())) {
+			return allComponents;
+		}
+		File[] files = projectFolder.listFiles();
+		for (int i = 0, size = files.length; i < size; i++) {
+			if ((targetComponent == null) || (targetComponent == "")) {
+				if (files[i].isDirectory()) {
+					allComponents.add(files[i].getName());
+				}
+			} else {
+				if ((files[i].isDirectory()) && (files[i].getName().equals(targetComponent))) {
+					allComponents.add(files[i].getName());
+				}
+			}
+
+		}
+		return allComponents;
+	}
+
+	private List<String> getAllJarFiles(String input, String component, String targetJar) {
+		List<String> allJars = new ArrayList<String>();
+		File componentFolder = new File(input + File.separatorChar + component);
+		if ((!componentFolder.exists()) || (!componentFolder.isDirectory())) {
+			return allJars;
+		}
+
+		File[] files = componentFolder.listFiles();
+		for (int i = 0, size = files.length; i < size; i++) {
+			if ((targetJar == null) || (targetJar == "")) {
+				if (files[i].isDirectory()) {
+					allJars.add(files[i].getName());
+				}
+			} else {
+				if ((files[i].isDirectory()) && (files[i].getName().equals(targetJar))) {
+					allJars.add(files[i].getName());
+				}
+			}
+		}
+		return allJars;
 	}
 
 	private List<String> getFullClassName(String input, String subPackage, String className) {
@@ -248,6 +325,14 @@ public class InjectionManager {
 	 */
 	private void generateReport() {
 		// TODO
+	}
+
+	public String getTargetJar() {
+		return targetJar;
+	}
+
+	public void setTargetJar(String targetJar) {
+		this.targetJar = targetJar;
 	}
 
 }

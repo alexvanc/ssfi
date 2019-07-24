@@ -1,27 +1,26 @@
 #Configuration:
-  injectionMode: single
-  inputPath: /home/alex/work/hadoop-input
-  outputPath: /home/alex/work/hadoop-output
+  injectionMode: batch
+  inputPath: /home/alex/work/testInput
+  outputPath: /home/alex/work/testOutput
   debug: false
   activationMode: always 
   activationRate: 5
   timeout: 15000
-  component: common
   
   singleRun:
     type: VALUE_FAULT
     locationPattern:
-      packageP: 
-      classP: 
-      methodP: 
-      variableP: 
-    variableScope: 
-    variableType: 
-    action: 
+      packageP: com.oath.halodb
+      classP: Segment
+      methodP: unlock
+      variableP: t
+    variableScope: local
+    variableType: long
+    action: ADD
     targetValue: 
     
   batchRun:
-    counter: 5
+    counter: 1500
     distributionMode: fix
     faultList:
     -

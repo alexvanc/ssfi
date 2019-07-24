@@ -4,4 +4,16 @@
         <name>mapreduce.framework.name</name>
         <value>yarn</value>
     </property>
+    <property>
+        <name>yarn.app.mapreduce.am.log.level</name>
+        <value>ERROR</value>
+    </property>
+    <property>
+        <name>mapreduce.map.log.level</name>
+        <value>ERROR</value>
+    </property>
+    <property>
+        <name>mapreduce.reduce.log.level</name>
+        <value>ERROR</value>
+    </property>
 </configuration>
