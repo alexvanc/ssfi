@@ -36,7 +36,7 @@ COPY config/* /tmp/
 #*.xml for cluster cofig
 #mapred-site.xml and hadoop-daemon.sh and yarn-daemon.sh for logging
 #log4j.properties for security logs level
-RUN mkdir ~/.ssh && mv /tmp/ssh_config ~/.ssh/config && \
+RUN mkdir ~/.ssh && mv /tmp/ssh_config ~/.ssh/config && mv /tmp/sshd_config /etc/ssh/sshd_config && \
     mv /tmp/hadoop-env.sh $HADOOP_HOME/etc/hadoop/hadoop-env.sh && \
     mv /tmp/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml && \
     mv /tmp/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml && \
@@ -46,7 +46,7 @@ RUN mkdir ~/.ssh && mv /tmp/ssh_config ~/.ssh/config && \
     mv /tmp/yarn-daemon.sh $HADOOP_HOME/sbin/yarn-daemon.sh && \
     mv /tmp/hadoop-daemon.sh $HADOOP_HOME/sbin/hadoop-daemon.sh && \
     mv /tmp/log4j.properties $HADOOP_HOME/etc/hadoop/log4j.properties && \
-    cp /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
+    mv /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
     mv /tmp/start-*.sh ~/ && \
     mv /tmp/run-*.sh ~/ && \
     mv /tmp/sysctl.conf /etc/sysctl.conf && \

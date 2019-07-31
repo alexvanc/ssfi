@@ -9,274 +9,249 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class JobHelper {
-	private final static Logger logger = LogManager.getLogger(JobHelper.class);
+    private final static Logger logger = LogManager.getLogger(JobHelper.class);
 
-	public static void runJob(String ID, String fullClassName, String inputPath, String componentName, String jarName,
-			String outputPath, long timeoutValue) {
-		pack(ID, fullClassName, inputPath, componentName, jarName, outputPath);
+    public static void runJob(String ID, String fullClassName, String inputPath, String componentName, String jarName,
+            String outputPath, long timeoutValue) {
+        pack(ID, fullClassName, inputPath, componentName, jarName, outputPath);
 
-		long runningTime = run(ID, fullClassName, inputPath, outputPath, timeoutValue);
+        long runningTime = run(ID, fullClassName, inputPath, outputPath, timeoutValue);
 
-		analyze(ID, outputPath, runningTime);
+        analyze(ID, outputPath, runningTime);
 
-		clean(ID, fullClassName, inputPath, componentName, jarName, outputPath);
-	}
+        clean(ID, fullClassName, inputPath, componentName, jarName, outputPath);
+    }
 
-	public static void runJob(String ID, String fullClassName, String inputPath, String outputPath, long timeoutValue) {
+    public static void runJob(String ID, String fullClassName, String inputPath, String outputPath, long timeoutValue) {
 
-	}
+    }
 
-	private static void pack(String ID, String fullClassName, String inputPath, String outputPath) {
+    private static void pack(String ID, String fullClassName, String inputPath, String outputPath) {
 
-	}
+    }
 
-	private static void pack(String ID, String fullClassName, String inputPath, String componentName, String jarName,
-			String outputPath) {
-		ProcessBuilder pb = new ProcessBuilder();
-		pb.command("/bin/bash", "-c", outputPath + "/pack.sh");
+    private static void pack(String ID, String fullClassName, String inputPath, String componentName, String jarName,
+            String outputPath) {
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("/bin/bash", "-c", outputPath + "/pack.sh");
 
-		Map<String, String> env = pb.environment();
-		env.put("ID", ID);
-		env.put("INPUT", inputPath);
-		env.put("OUTPUT", outputPath);
-		env.put("COMPONENT", componentName);
-		env.put("JARNAME", jarName);
-		String target = fullClassName.replace('.', File.separatorChar) + ".class";
-		env.put("TARGET", target);
-		String className = target.substring(target.lastIndexOf(File.separatorChar) + 1);
-		String classFolder = inputPath + File.separatorChar + componentName + File.separatorChar + jarName
-				+ File.separatorChar + target.substring(0, target.lastIndexOf(File.separatorChar));
-		env.put("FOLDER", classFolder);
-		env.put("CLASS", className);
+        Map<String, String> env = pb.environment();
+        env.put("ID", ID);
+        env.put("INPUT", inputPath);
+        env.put("OUTPUT", outputPath);
+        env.put("COMPONENT", componentName);
+        env.put("JARNAME", jarName);
+        String target = fullClassName.replace('.', File.separatorChar) + ".class";
+        env.put("TARGET", target);
+        String className = target.substring(target.lastIndexOf(File.separatorChar) + 1);
+        String classFolder = inputPath + File.separatorChar + componentName + File.separatorChar + jarName
+                + File.separatorChar + target.substring(0, target.lastIndexOf(File.separatorChar));
+        env.put("FOLDER", classFolder);
+        env.put("CLASS", className);
+        pb.redirectOutput(new File("/tmp/packNormal.txt"));
+        pb.redirectError(new File("/tmp/packError.txt"));
 
-		try {
-			Process p = pb.start();
-			BufferedReader normalReader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            while (p.isAlive() && (nowTime - startTime) < 80000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > 80000) {
+                p.destroy();
+                logger.error("Pack Fatal");
+                forceKill(outputPath);
+            }
+            logger.info("Pack Success");
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
 
-			StringBuilder normalBuilder = new StringBuilder();
-			StringBuilder errorBuilder = new StringBuilder();
+        }
+    }
 
-			String line;
-			while ((line = normalReader.readLine()) != null) {
-				normalBuilder.append(line + "\n");
-			}
+    private static long run(String ID, String fullClassName, String inputPath, String outputPath, long timeoutValue) {
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("bash", "-c", outputPath + "/run.sh");
+        Map<String, String> env = pb.environment();
+        pb.redirectOutput(new File("/tmp/runNormal.txt"));
+        pb.redirectError(new File("/tmp/runError.txt"));
+        env.put("ID", ID);
+        env.put("INPUT", inputPath);
+        env.put("OUTPUT", outputPath);
+        String target = fullClassName.replace(".", File.separator) + ".class";
+        env.put("TARGET", target);
+        String className = target.substring(target.lastIndexOf(File.separator));
+        String classFolder = target.substring(0, target.lastIndexOf(File.separator));
+        env.put("FOLDER", classFolder);
+        env.put("CLASS", className);
 
-			while ((line = errorReader.readLine()) != null) {
-				errorBuilder.append(line + "\n");
-			}
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
 
-			int exitVal = p.waitFor();
-			if (exitVal == 0) {
-				logger.info("Pack Success");
-				logger.info(normalBuilder.toString());
-				logger.info(errorBuilder.toString());
-			} else {
-				logger.warn("Pack Failed");
-				logger.error(errorBuilder.toString());
-			}
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			logger.error(e.getMessage());
+            while (p.isAlive() && (nowTime - startTime) < timeoutValue) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > timeoutValue) {
+                // program hangs on
+                p.destroy();
+                kill(ID, outputPath);
 
-		}
-	}
+            }
 
-	private static long run(String ID, String fullClassName, String inputPath, String outputPath, long timeoutValue) {
-		ProcessBuilder pb = new ProcessBuilder();
-		pb.command("bash", "-c", outputPath + "/run.sh");
-		Map<String, String> env = pb.environment();
-//		pb.redirectOutput(new File("/tmp/runNormal.txt"));
-//		pb.redirectError(new File("/tmp/runError.txt"));
-		env.put("ID", ID);
-		env.put("INPUT", inputPath);
-		env.put("OUTPUT", outputPath);
-		String target = fullClassName.replace(".", File.separator) + ".class";
-		env.put("TARGET", target);
-		String className = target.substring(target.lastIndexOf(File.separator));
-		String classFolder = target.substring(0, target.lastIndexOf(File.separator));
-		env.put("FOLDER", classFolder);
-		env.put("CLASS", className);
+            long endTime = System.currentTimeMillis();
+            logger.info("Run Success");
 
-		try {
-			long startTime = System.currentTimeMillis();
-			long nowTime = System.currentTimeMillis();
-			Process p = pb.start();
+            return endTime - startTime;
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
+            return -1;
+        }
+    }
 
-			BufferedReader normalReader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+    private static void kill(String ID, String outputPath) {
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("bash", "-c", outputPath + "/kill.sh");
+        Map<String, String> env = pb.environment();
+        env.put("ID", ID);
+        pb.redirectOutput(new File("/tmp/killNormal.txt"));
+        pb.redirectError(new File("/tmp/killError.txt"));
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            while (p.isAlive() && (nowTime - startTime) < 80000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > 80000) {
+                // program hangs on
+                p.destroy();
+                forceKill(outputPath);
 
-			StringBuilder normalBuilder = new StringBuilder();
-			StringBuilder errorBuilder = new StringBuilder();
+            }
+            logger.info("Kill Success");
 
-			while (p.isAlive() && (nowTime - startTime) < timeoutValue) {
-				String line;
-				if ((line = normalReader.readLine()) != null) {
-					normalBuilder.append(line + "\n");
-				}
-				if ((line = errorReader.readLine()) != null) {
-					errorBuilder.append(line + "\n");
-				}
-				Thread.sleep(100);
-				nowTime = System.currentTimeMillis();
-			}
-			if ((nowTime - startTime) > timeoutValue) {
-				// program hangs on
-				kill(ID, outputPath);
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
+        }
 
-			}
-			int exitVal = p.waitFor();
+    }
 
-			long endTime = System.currentTimeMillis();
-			if (exitVal == 0) {
+    private static void forceKill(String outputPath) {
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("/bin/bash", "-c", outputPath + "/forcekill.sh");
 
-				logger.info("Run Success");
-				logger.info(normalBuilder.toString());
-				logger.info(errorBuilder.toString());
+        Map<String, String> env = pb.environment();
 
-			} else {
-				logger.info("Run Failed");
-				logger.info(normalBuilder.toString());
-				logger.info(errorBuilder.toString());
+        env.put("OUTPUT", outputPath);
 
-			}
-			return endTime - startTime;
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			logger.error(e.getMessage());
-			return -1;
-		}
-	}
+        pb.redirectOutput(new File("/tmp/forceKillNormal.txt"));
+        pb.redirectError(new File("/tmp/forceKillError.txt"));
 
-	private static void kill(String ID, String outputPath) {
-		ProcessBuilder pb = new ProcessBuilder();
-		pb.command("bash", "-c", outputPath + "/kill.sh");
-		Map<String, String> env = pb.environment();
-		env.put("ID", ID);
-		try {
-			Process p = pb.start();
-			BufferedReader normalReader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            // pack process cannot be longer that one minute
+            while (p.isAlive() && (nowTime - startTime) < 60000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
 
-			StringBuilder normalBuilder = new StringBuilder();
-			StringBuilder errorBuilder = new StringBuilder();
+            logger.info("ForceKill Success");
 
-			String line;
-			while ((line = normalReader.readLine()) != null) {
-				normalBuilder.append(line + "\n");
-			}
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
 
-			while ((line = errorReader.readLine()) != null) {
-				errorBuilder.append(line + "\n");
-			}
-			int exitVal = p.waitFor();
-			if (exitVal == 0) {
-				logger.info("Kill Success");
-				logger.info(normalBuilder.toString());
-				logger.info(errorBuilder.toString());
-			} else {
-				logger.warn("Kill Failed");
-				logger.info(normalBuilder.toString());
-				logger.error(errorBuilder.toString());
-			}
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			logger.error(e.getMessage());
-		}
+        }
+    }
 
-	}
+    private static void clean(String ID, String fullClassName, String inputPath, String componentName, String jarName,
+            String outputPath) {
+        kill(ID, outputPath);
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("bash", "-c", outputPath + "/clean.sh");
+        Map<String, String> env = pb.environment();
+        env.put("ID", ID);
+        env.put("INPUT", inputPath);
+        env.put("OUTPUT", outputPath);
+        env.put("COMPONENT", componentName);
+        env.put("JARNAME", jarName);
+        String target = fullClassName.replace('.', File.separatorChar) + ".class";
+        env.put("TARGET", target);
+        String className = target.substring(target.lastIndexOf(File.separatorChar) + 1);
+        String classFolder = inputPath + File.separatorChar + componentName + File.separatorChar + jarName
+                + File.separatorChar + target.substring(0, target.lastIndexOf(File.separatorChar));
+        env.put("FOLDER", classFolder);
+        env.put("CLASS", className);
+        pb.redirectOutput(new File("/tmp/cleanNormal.txt"));
+        pb.redirectError(new File("/tmp/cleanError.txt"));
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            while (p.isAlive() && (nowTime - startTime) < 130000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > 130000) {
+                // program hangs on
+                p.destroy();
+                forceKill(outputPath);
+                logger.error("cleaning hang error");
+            }
 
-	private static void clean(String ID, String fullClassName, String inputPath, String componentName, String jarName,
-			String outputPath) {
-		kill(ID, outputPath);
-		ProcessBuilder pb = new ProcessBuilder();
-		pb.command("bash", "-c", outputPath + "/clean.sh");
-		Map<String, String> env = pb.environment();
-		env.put("ID", ID);
-		env.put("INPUT", inputPath);
-		env.put("OUTPUT", outputPath);
-		env.put("COMPONENT", componentName);
-		env.put("JARNAME", jarName);
-		String target = fullClassName.replace('.', File.separatorChar) + ".class";
-		env.put("TARGET", target);
-		String className = target.substring(target.lastIndexOf(File.separatorChar) + 1);
-		String classFolder = inputPath + File.separatorChar + componentName + File.separatorChar + jarName
-				+ File.separatorChar + target.substring(0, target.lastIndexOf(File.separatorChar));
-		env.put("FOLDER", classFolder);
-		env.put("CLASS", className);
-		try {
-			Process p = pb.start();
-			BufferedReader normalReader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+            logger.info("Clean Success");
 
-			StringBuilder normalBuilder = new StringBuilder();
-			StringBuilder errorBuilder = new StringBuilder();
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
+        }
+    }
 
-			String line;
-			while ((line = normalReader.readLine()) != null) {
-				normalBuilder.append(line + "\n");
-			}
+    private static void analyze(String ID, String outputPath, long runningTime) {
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("bash", "-c", outputPath + "/analyze.sh");
+        Map<String, String> env = pb.environment();
+        env.put("ID", ID);
+        env.put("OUTPUT", outputPath);
+        env.put("ACT_FILE", outputPath + File.separatorChar + "activation.log");
+        env.put("RTIME", "" + runningTime);
+        pb.redirectOutput(new File("/tmp/analyzeNormal.txt"));
+        pb.redirectError(new File("/tmp/analyzeError.txt"));
+        // env.remove("OTHERVAR");
+        // env.put("VAR2", env.get("VAR1") + "suffix");
+        // pb.directory(new File("myDir"));
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            while (p.isAlive() && (nowTime - startTime) < 60000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > 60000) {
+                // program hangs on
+                p.destroy();
+                logger.error("Analyze Fatal");
+            }
 
-			while ((line = errorReader.readLine()) != null) {
-				errorBuilder.append(line + "\n");
-			}
-			int exitVal = p.waitFor();
-			if (exitVal == 0) {
-				logger.info("Clean Success");
-				logger.info(normalBuilder.toString());
-				logger.error(errorBuilder.toString());
-			} else {
-				logger.warn("Clean Failed");
-				logger.info(normalBuilder.toString());
-				logger.error(errorBuilder.toString());
-			}
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			logger.error(e.getMessage());
-		}
-	}
+            logger.info("Analyze Success");
 
-	private static void analyze(String ID, String outputPath, long runningTime) {
-		ProcessBuilder pb = new ProcessBuilder();
-		pb.command("bash", "-c", outputPath + "/analyze.sh");
-		Map<String, String> env = pb.environment();
-		env.put("ID", ID);
-		env.put("OUTPUT", outputPath);
-		env.put("ACT_FILE", outputPath + File.separatorChar + "activation.log");
-		env.put("RTIME", "" + runningTime);
-//		 env.remove("OTHERVAR");
-//		 env.put("VAR2", env.get("VAR1") + "suffix");
-//		 pb.directory(new File("myDir"));
-		try {
-			Process p = pb.start();
-			BufferedReader normalReader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
-
-			StringBuilder normalBuilder = new StringBuilder();
-			StringBuilder errorBuilder = new StringBuilder();
-
-			String line;
-			while ((line = normalReader.readLine()) != null) {
-				normalBuilder.append(line + "\n");
-			}
-
-			while ((line = errorReader.readLine()) != null) {
-				errorBuilder.append(line + "\n");
-			}
-			int exitVal = p.waitFor();
-			if (exitVal == 0) {
-				logger.info("Analyze Success");
-				logger.info(normalBuilder.toString());
-				logger.error(errorBuilder.toString());
-			} else {
-				logger.warn("Analyze Failed");
-				logger.info(normalBuilder.toString());
-				logger.error(errorBuilder.toString());
-			}
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			logger.error(e.getMessage());
-		}
-	}
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
+        }
+    }
 
 }
+
