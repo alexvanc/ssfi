@@ -9,6 +9,7 @@ public class Configuration {
 	private String injectionMode;
 	private String inputPath;
 	private String outputPath;
+	private String dependencyPath;
 	private String component;
 	private String jarName;
 	private boolean debug;
@@ -136,4 +137,13 @@ public class Configuration {
 		this.jarName = jarName;
 	}
 
+    public String getDependencyPath() {
+        return dependencyPath;
+    }
+
+    public void setDependencyPath(String dependencyPath) {
+        this.dependencyPath = dependencyPath;
+    }
+
 }
+

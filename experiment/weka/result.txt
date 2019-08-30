@@ -1,0 +1,21 @@
+
+Time taken to test model on test data: 0 seconds
+
+=== Error on test data ===
+
+Correctly Classified Instances           4               80      %
+Incorrectly Classified Instances         1               20      %
+Kappa statistic                          0.6154
+Mean absolute error                      0.2   
+Root mean squared error                  0.4472
+Relative absolute error                 40      %
+Root relative squared error             89.4427 %
+Total Number of Instances                5     
+
+
+=== Confusion Matrix ===
+
+ a b   <-- classified as
+ 2 0 | a = tested_negative
+ 1 2 | b = tested_positive
+

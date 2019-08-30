@@ -1,0 +1,35 @@
+#this is the Dockerfile only for elasticsearch 
+#without tracing complied and enabled
+
+FROM rappdw/docker-java-python:latest
+
+# install openssh-server, wget and gcc and other dependencies of tracing
+RUN apt-get update && apt-get install -y openssh-server wget vim uuid-dev libconfig-dev libcurl4-openssl-dev build-essential python-mysqldb
+
+# install elasticsearch
+RUN mkdir -p /work/search/search-output
+COPY *.sh *.py /work/search/search-output/
+COPY elasticsearch-7.2.0-linux-x86_64.tar.gz /tmp/
+RUN cd /tmp/ && tar -xzf elasticsearch-7.2.0-linux-x86_64.tar.gz && mv elasticsearch-7.2.0 /usr/share/elasticsearch
+ENV ES_HOME=/usr/share/elasticsearch
+
+WORKDIR /work/search
+
+#config hadoop cluster
+COPY ./* /tmp/
+COPY ./init.sh /work/
+COPY ./log4j2.properties $ES_HOME/etc/log4j2.properties
+
+#RUN mv /tmp/sysctl.conf /etc/sysctl.conf    
+RUN chmod +x /work/search/search-output/*.sh && \
+    chmod +x /work/init.sh
+COPY ssfi.jar /work/
+COPY search.tar.gz /tmp/
+RUN tar  -C /work/search/ -xzf /tmp/search.tar.gz
+
+RUN useradd elas
+RUN chown -R elas /work && chown -R elas /usr/share/elasticsearch
+USER elas
+WORKDIR /work/search
+
+CMD [ "sh", "-c", "/work/init.sh; /bin/bash"]

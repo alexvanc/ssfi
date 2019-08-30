@@ -8,25 +8,35 @@ FROM rappdw/docker-java-python:latest
 # install openssh-server, wget and gcc and other dependencies of tracing
 RUN apt-get update && apt-get install -y openssh-server wget vim uuid-dev libconfig-dev libcurl4-openssl-dev build-essential python-mysqldb
 
-RUN mkdir -p /work/hadoop && mkdir /work/hadoop/hadoop-output
-COPY *.sh *.py /work/hadoop/hadoop-output/
+RUN mkdir -p /work/hadoop && mkdir -p /work/spark && mkdir /work/spark/spark-output 
+COPY *.sh *.py /work/spark/spark-output/
 
 WORKDIR /work/hadoop
 
 # install hadoop 2.6.5
-RUN wget https://archive.apache.org/dist/hadoop/core/hadoop-2.6.5/hadoop-2.6.5.tar.gz && \
+RUN wget http://mirrors.tuna.tsinghua.edu.cn/apache/hadoop/common/hadoop-2.6.5/hadoop-2.6.5.tar.gz && \
     tar -xzvf hadoop-2.6.5.tar.gz && \
     mv hadoop-2.6.5 /usr/local/hadoop && \
     rm hadoop-2.6.5.tar.gz
+  
+WORKDIR /work/spark  
+#RUN wget https://archive.apache.org/dist/spark/spark-2.3.1/spark-2.3.1-bin-hadoop2.6.tgz && \
+COPY spark-2.3.1-bin-hadoop2.6.tgz /work/spark/
+RUN	tar -xzvf spark-2.3.1-bin-hadoop2.6.tgz && \
+    mv spark-2.3.1-bin-hadoop2.6 /usr/local/spark && \
+    rm /work/spark/spark-2.3.1-bin-hadoop2.6.tgz 
+
 
 # set environment variable
 ENV HADOOP_HOME=/usr/local/hadoop
+ENV SPARK_HOME=/usr/local/spark
 ENV PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
 
-
+WORKDIR /work/hadoop
 RUN mkdir -p hdfs/namenode && \
     mkdir -p hdfs/datanode && \
-    mkdir -p /tmp/hadoop/klogs && mkdir /tmp/hadoop/logs
+    mkdir -p /tmp/hadoop/klogs && mkdir /tmp/hadoop/logs && \
+    mkdir -p /tmp/spark/klogs && mkdir /tmp/spark/logs
 
 #config hadoop cluster
 COPY config/* /tmp/
@@ -46,23 +56,25 @@ RUN mkdir ~/.ssh && mv /tmp/ssh_config ~/.ssh/config && \
     mv /tmp/yarn-daemon.sh $HADOOP_HOME/sbin/yarn-daemon.sh && \
     mv /tmp/hadoop-daemon.sh $HADOOP_HOME/sbin/hadoop-daemon.sh && \
     mv /tmp/log4j.properties $HADOOP_HOME/etc/hadoop/log4j.properties && \
-    mv /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
+    mv /tmp/log4j.properties.spark $SPARK_HOME/conf/log4j.properties && \
+    cp /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
+    mv /tmp/slaves $SPARK_HOME/conf/slaves && \
+    mv /tmp/spark-env.sh $SPARK_HOME/conf/spark-env.sh && \
+    mv /tmp/spark-defaults.conf $SPARK_HOME/conf/spark-defaults.conf && \
     mv /tmp/start-*.sh ~/ && \
     mv /tmp/run-*.sh ~/ && \
     mv /tmp/sysctl.conf /etc/sysctl.conf && \
     mv /tmp/init.sh /work/
     
 RUN chmod +x ~/start-hadoop.sh && \
-    chmod +x ~/run-wordcount.sh && \
+    chmod +x ~/*.sh && \
     chmod +x $HADOOP_HOME/sbin/start-dfs.sh && \
     chmod +x $HADOOP_HOME/sbin/start-yarn.sh && \
     chmod +x /work/init.sh
 
 COPY ssfi.jar /work/
-COPY hadoop.tar.gz /tmp/
-COPY hadoop-dependency.tar.gz /tmp/
-RUN tar  -C /work/hadoop -xzf /tmp/hadoop.tar.gz
-RUN tar  -C /work/hadoop -xzf /tmp/hadoop-dependency.tar.gz
+COPY spark.tar.bz /tmp/
+RUN tar  -C /work/spark -xjf /tmp/spark.tar.bz
 
 
 CMD [ "sh", "-c", "/work/init.sh; /bin/bash"]
