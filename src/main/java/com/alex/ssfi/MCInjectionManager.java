@@ -181,7 +181,7 @@ public class MCInjectionManager {
             args[0] = "-cp";
             String fullClassPath = getAllClassPath(input);
             args[1] = fullClassPath;
-            //logger.error(fullClassPath);
+            // logger.error(fullClassPath);
             args[2] = "-pp";
             args[3] = "-p";
             args[4] = "jb";
@@ -200,7 +200,7 @@ public class MCInjectionManager {
         String fullClassPath = ".";
         File rootPack = new File(this.dependencyPath);
         if ((!rootPack.exists()) || (!rootPack.isDirectory())) {
-            return fullClassPath;
+            return fullClassPath + inputPath;
         }
         File[] files = rootPack.listFiles();
         for (int i = 0; i < files.length; i++) {
@@ -317,7 +317,15 @@ public class MCInjectionManager {
             int[] injectionNumber = this.randomDistribute(batchInjection.getCounter(), allRuns.size());
             logger.debug("Random distribution: " + injectionNumber.toString());
             for (int i = 0; i < allRuns.size(); i++) {
-                for (int j = 0; j < injectionNumber[i]; i++) {
+                for (int j = 0; j < injectionNumber[i]; j++) {
+                    this.performSingleInjection(allRuns.get(i), input, ouput, activationMode, activationRate);
+                }
+            }
+        } else if (distributionMode.equals("even")) {
+            logger.debug("Even distribution: " + batchInjection.getCounter() / allRuns.size());
+            for (int i = 0; i < allRuns.size(); i++) {
+                int injectionNumber = batchInjection.getCounter() / allRuns.size();
+                for (int j = 0; j < injectionNumber; j++) {
                     this.performSingleInjection(allRuns.get(i), input, ouput, activationMode, activationRate);
                 }
             }
@@ -370,4 +378,3 @@ public class MCInjectionManager {
     }
 
 }
-

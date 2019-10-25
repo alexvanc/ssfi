@@ -7,7 +7,7 @@ class Analyzer(object):
     def __init__(self,ID,runningTime,activationFile):
         self.ID=ID
         self.runningTime=runningTime
-        self.db = MySQLdb.connect("137.82.252.59", "root", "test1234", "injection", charset="utf8")
+        self.db = MySQLdb.connect("10.0.0.3", "root", "Finelab123...", "injection", charset="utf8")
         self.cursor = self.db.cursor()
         self.activationFile=activationFile
         self.sqlDict={}
@@ -29,7 +29,7 @@ class Analyzer(object):
                 if activationNumber!=0:
                     self.sqlDict['activated']=str(1)
                     self.sqlDict['activated_number']=str(activationNumber)
-                    self.parseFailure()
+                    self.sqlDict['running_time']=self.runningTime
             
             self.insertIntoDB()
             
@@ -54,66 +54,10 @@ class Analyzer(object):
         
         tableColumns=",".join(allKeys)
         valueTml=",".join(valueHolder)
-        insertTemp="insert into injection_record_weka(%s) values(%s)" % (tableColumns, valueTml)
+        insertTemp="insert into injection_record_hadoop(%s) values(%s)" % (tableColumns, valueTml)
         insertSQL=insertTemp % tuple(values)
         self.cursor.execute(insertSQL)
         self.db.commit()
-    
-    def parseFailure(self):
-        crashed=False 
-        rightOutput=False
-        exceptions=False
-        timeOut=False
-        if os.path.exists("/tmp/runResult.txt"):
-            outputFile=open("/tmp/runResult.txt",'r')
-            lines=outputFile.readlines()
-            outputFile.close()
-            self.sqlDict['running_output']="".join(lines)
-            if len(lines)==0:
-                crashed=True
-            else:
-                if len(lines)==21 and lines[5].strip().split("\t")==4:
-		    items=lines[5].strip().split("\t")
-		    if item[1]=="4" and lines[2]=="80":
-                        rightOutput=True
-        else:
-            crashed=True
-        if os.path.exists("/tmp/runError.txt"):
-            errFile=open("/tmp/runError.txt",'r')
-            lines=errFile.readlines()
-            errFile.close()
-            self.sqlDict['running_error']="".join(lines)
-            self.sqlDict['running_error']=self.sqlDict['running_error'].replace('"','-')
-            self.sqlDict['running_error']=self.sqlDict['running_error'].replace("'","-")
-            if len(lines)>3:
-                exceptions=True
-        rtime=int(self.runningTime)
-        if rtime>15000:
-            timeOut=True
-        self.sqlDict['running_time']=self.runningTime
-
-        if timeOut:
-            if exceptions:
-                self.sqlDict['failure_type']="Detected Hang"
-            else:
-                self.sqlDict['failure_type']="Silent Hang"
-        elif crashed:
-            if exceptions:
-                self.sqlDict['failure_type']="Detected Early Exit"
-            else:
-                self.sqlDict['failure_type']="Silent Early Exit"
-        else:
-            if rightOutput:
-                if exceptions:
-                    self.sqlDict['failure_type']="Benign"
-                else:
-                    self.sqlDict['failure_type']="No effect"
-            else:
-                if exceptions:
-                    self.sqlDict['failure_type']="Detected Data Corruption"
-                else:
-                    self.sqlDict['failure_type']="Silent Data Corruption"
-
     
     def parseActivation(self,lines):
         tmpLines=[]
@@ -168,17 +112,20 @@ class Analyzer(object):
                 columnKey="variable_value"
             elif key=="ExeIndex":
                 columnKey="exe_index"
+            elif key=="JarName":
+                columnKey="jar_file"
+            elif key=="ComponentName":
+                columnKey="component"
             else:
                 print("Unexpected key: "+key)
-                continue               
+                sys.exit(1)
+                
             self.sqlDict[columnKey]=item.split(":")[1]
             
     
     def close(self):
         self.cursor.close();
         self.db.close()
-
-            
 
 
 if __name__ == '__main__':

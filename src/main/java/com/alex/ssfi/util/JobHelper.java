@@ -23,11 +23,48 @@ public class JobHelper {
     }
 
     public static void runJob(String ID, String fullClassName, String inputPath, String outputPath, long timeoutValue) {
+        pack2(ID, fullClassName, inputPath, outputPath);
 
+        long runningTime = run(ID, fullClassName, inputPath, outputPath, timeoutValue);
+
+        analyze(ID, outputPath, runningTime);
+
+        clean2(ID, fullClassName, inputPath, outputPath);
     }
 
-    private static void pack(String ID, String fullClassName, String inputPath, String outputPath) {
+    private static void pack2(String ID, String fullClassName, String inputPath, String outputPath) {
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("/bin/bash", "-c", outputPath + "/pack.sh");
 
+        Map<String, String> env = pb.environment();
+        env.put("ID", ID);
+        env.put("INPUT", inputPath);
+        env.put("OUTPUT", outputPath);
+        String target = fullClassName.replace('.', File.separatorChar) + ".class";
+        env.put("TARGET", target);
+
+        pb.redirectOutput(new File("/tmp/packNormal.txt"));
+        pb.redirectError(new File("/tmp/packError.txt"));
+
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            while (p.isAlive() && (nowTime - startTime) < 80000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > 80000) {
+                p.destroy();
+                logger.error("Pack Fatal");
+                forceKill(outputPath);
+            }
+            logger.info("Pack Success");
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
+
+        }
     }
 
     private static void pack(String ID, String fullClassName, String inputPath, String componentName, String jarName,
@@ -87,7 +124,6 @@ public class JobHelper {
         String classFolder = target.substring(0, target.lastIndexOf(File.separator));
         env.put("FOLDER", classFolder);
         env.put("CLASS", className);
-
         try {
             long startTime = System.currentTimeMillis();
             long nowTime = System.currentTimeMillis();
@@ -175,6 +211,41 @@ public class JobHelper {
         }
     }
 
+    private static void clean2(String ID, String fullClassName, String inputPath, String outputPath) {
+        kill(ID, outputPath);
+        ProcessBuilder pb = new ProcessBuilder();
+        pb.command("bash", "-c", outputPath + "/clean.sh");
+        Map<String, String> env = pb.environment();
+        env.put("ID", ID);
+        env.put("INPUT", inputPath);
+        env.put("OUTPUT", outputPath);
+        String target = fullClassName.replace('.', File.separatorChar) + ".class";
+        env.put("TARGET", target);
+        pb.redirectOutput(new File("/tmp/cleanNormal.txt"));
+        pb.redirectError(new File("/tmp/cleanError.txt"));
+        try {
+            long startTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            Process p = pb.start();
+            while (p.isAlive() && (nowTime - startTime) < 130000) {
+                Thread.sleep(100);
+                nowTime = System.currentTimeMillis();
+            }
+            if ((nowTime - startTime) > 130000) {
+                // program hangs on
+                p.destroy();
+                forceKill(outputPath);
+                logger.error("cleaning hang error");
+            }
+
+            logger.info("Clean Success");
+
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            logger.error(e.getMessage());
+        }
+    }
+
     private static void clean(String ID, String fullClassName, String inputPath, String componentName, String jarName,
             String outputPath) {
         kill(ID, outputPath);
@@ -254,4 +325,3 @@ public class JobHelper {
     }
 
 }
-

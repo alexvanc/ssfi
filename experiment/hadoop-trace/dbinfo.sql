@@ -1,7 +1,7 @@
-drop table if exists `injection_record_weka`;
-create table `injection_record_weka2`(
+drop table if exists `injection_record_hadoop`;
+create table `injection_record_hadoop`(
         `id` int not null primary key auto_increment,
-        `fault_id` varchar(255) not null,
+        `fault_id` varchar(255) unique not null,
         `fault_type` varchar(255) not null,
         `activation_mode` varchar(255) not null,
         `package` text,
@@ -18,5 +18,16 @@ create table `injection_record_weka2`(
         `running_error` text,
         `failure_type` varchar(255),
         `running_time` int,
-        `exe_index` int
+        `last_time` int,
+        `start_time` datetime,
+        `end_time` datetime,
+        `exe_index` int,
+        `component` varchar(255),
+        `sub_component` text,
+        `jar_file` text,
+        `error_component` varchar(255),
+        `error_class` text,
+        `error_file` text,
+        `process_tag` varchar(255),
+        `container_id` VARCHAR(511)
 );
