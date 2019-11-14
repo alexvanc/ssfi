@@ -11,4 +11,5 @@ data
 *.tar*
 *.tgz*
 *.tbz*
+*.zip
 

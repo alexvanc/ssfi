@@ -25,8 +25,8 @@ public class Application {
 				logger.fatal("Invalid Configuration!");
 				return;
 			}
-        	InjectionManager.getManager().peformInjection(config);
-//			MCInjectionManager.getManager().peformInjection(config);
+        	// InjectionManager.getManager().peformInjection(config);
+			MCInjectionManager.getManager().peformInjection(config);
 			logger.info("Injection Succeed!");
 		} catch (Exception e) {
 			logger.info("Injection Failed!");

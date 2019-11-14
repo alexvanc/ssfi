@@ -22,7 +22,10 @@
 # remote nodes.
 
 # The java implementation to use.
-export JAVA_HOME=/usr/lib/jvm/zulu-8-amd64
+#export JAVA_HOME=/usr/lib/jvm/zulu-8-amd64
+
+# the java implementation to use for old docker versions
+export JAVA_HOME=/docker-java-home
 
 # The jsvc implementation to use. Jsvc is required to run secure datanodes
 # that bind to privileged ports to provide authentication of data transfer

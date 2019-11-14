@@ -7,7 +7,7 @@ class Analyzer(object):
     def __init__(self,ID,runningTime,activationFile):
         self.ID=ID
         self.runningTime=runningTime
-        self.db = MySQLdb.connect("10.0.0.3", "root", "Finelab123...", "injection", charset="utf8")
+        self.db = MySQLdb.connect("10.58.0.200", "root", "test1234", "new_injection", charset="utf8")
         self.cursor = self.db.cursor()
         self.activationFile=activationFile
         self.sqlDict={}
@@ -19,6 +19,7 @@ class Analyzer(object):
             injectionFile.close()
             lastLine=lines[len(lines)-1]
             self.parseInjection(lastLine)
+            self.sqlDict['running_time']=self.runningTime
             
             #get activation info
             if os.path.exists(self.activationFile):
@@ -29,7 +30,7 @@ class Analyzer(object):
                 if activationNumber!=0:
                     self.sqlDict['activated']=str(1)
                     self.sqlDict['activated_number']=str(activationNumber)
-                    self.sqlDict['running_time']=self.runningTime
+                    
             
             self.insertIntoDB()
             
@@ -44,7 +45,7 @@ class Analyzer(object):
         allKeys=self.sqlDict.keys()
 
         for key in allKeys: 
-            value=self.sqlDict[key].strip()
+            value=self.sqlDict[key].strip().replace("'",'"')
             values.append(value)
 #             print(value)
             if value.isdigit():
@@ -73,15 +74,11 @@ class Analyzer(object):
                 counter=counter+1
         return counter
             
-            
-            
-        
-    
     def parseInjection(self,lastLine):
         tuples=lastLine.split("\t")
         for item in tuples:
             key=item.split(":")[0]
-            value=item.split(":")[1]
+            value=item.split(":")[1].replace("'",'"')
             columnKey=""
             
             if(key=="ID"):
@@ -118,7 +115,7 @@ class Analyzer(object):
                 columnKey="component"
             else:
                 print("Unexpected key: "+key)
-                sys.exit(1)
+                continue
                 
             self.sqlDict[columnKey]=item.split(":")[1]
             

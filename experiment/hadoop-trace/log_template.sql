@@ -1,5 +1,7 @@
 drop table if exists `hadoop_log_template`;
 create table `hadoop_log_template`(
         `id` int not null primary key auto_increment,
-        `hash_key` varchar(255) unique not null
+        `hash_key` varchar(255) unique not null,
+        `tmpl_content` text,
+        `source_fi` varchar(255)
 );

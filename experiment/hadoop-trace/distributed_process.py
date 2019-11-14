@@ -17,23 +17,48 @@ import log_parser
 
 class Processor(object):
     def __init__(self,dataDir,prefix):
-        self.db = pymysql.connect("10.58.0.200", "root", "test1234", "injection_merge", charset="utf8")
+        self.db = pymysql.connect("10.58.0.200", "root", "test1234", "new_injection", charset="utf8")
         self.cursor = self.db.cursor()
         self.dataDir=dataDir
         self.prefix=prefix
+        self.outputDict={}
         self.sqlDict={}
         self.containerDict={}
     
     def start(self):
         if os.path.exists(self.dataDir):
-            self.load_containers()
+            self.load_rightOutput()
+            # self.load_containers()
             # self.load_resource()
-            dirs=os.listdir(self.dataDir+"/fi")
+        if self.prefix=='act':
+            #only process all activated faults
+            sql="select fault_id from injection_original_hadoop where activated=1"
+            self.cursor.execute(sql)
+            results=self.cursor.fetchall()
+            for result in results:
+                self.processOneFI(result[0])
+
+        else:
+            dirs=os.listdir(self.dataDir+"/hadoop")
             for fi in dirs:
                 self.processOneFI(fi)
     
+    # to parse the wordcount file
+    def load_rightOutput(self):
+        wordCountFile=open("data/input_data.txt",'r')
+        lines=wordCountFile.readlines()
+        wordCountFile.close()
+        lineCounter=len(lines)
+        oneLine=lines[0].strip()
+        allWords=oneLine.split(" ")
+        for word in allWords:
+            self.outputDict[word]=lineCounter
+
+
+
+    
     def load_containers(self):
-        containerFile=open(self.dataDir+"/container.log")
+        containerFile=open(self.dataDir+"/container.log",'r')
         lines=containerFile.readlines()
         containerFile.close()
         lineCounter=0
@@ -53,7 +78,7 @@ class Processor(object):
         
 
     def getContainerID(self,ID):
-        sql="select fault_type from injection_merge_hadoop where fault_id='%s'" % ID
+        sql="select fault_type from injection_original_hadoop where fault_id='%s'" % ID
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         fault_type=results[0][0]
@@ -87,14 +112,16 @@ class Processor(object):
 
     
     def processOneFI(self,fi):
-        if not fi.lower().startswith(self.prefix):
+        if self.prefix!='act' and not fi.lower().startswith(self.prefix):
             return
         ID=fi
         containerID=""
-        try:
-            containerID=self.getContainerID(ID)
-        except:
-            print("Cannot find container for fault: "+ID)
+        # try:
+        #     containerID=self.getContainerID(ID)
+        # except:
+        #     print("Cannot find container for fault: "+ID)
+        #     return
+        if not os.path.exists(self.dataDir+"/hadoop/"+ID):
             return
         
         timeResult=self.getRunningTime(ID)
@@ -105,8 +132,8 @@ class Processor(object):
             exceptions=False
             timeOut=False
             #check whether all hadoop services started
-            if os.path.exists(self.dataDir+'/fi/'+ID+'/'+'startresult.log'):
-                outputFile=open(self.dataDir+'/fi/'+ID+'/'+'startresult.log','r')
+            if os.path.exists(self.dataDir+'/hadoop/'+ID+'/'+'startresult.log'):
+                outputFile=open(self.dataDir+'/hadoop/'+ID+'/'+'startresult.log','r')
                 lines=outputFile.readlines()
                 outputFile.close()
                 if len(lines)!=7:
@@ -114,28 +141,19 @@ class Processor(object):
             else:
                 crashed=True
             #check whether running result is right
-            if os.path.exists(self.dataDir+'/fi/'+ID+'/'+'runResult.txt'):
-                resultFile=open(self.dataDir+'/fi/'+ID+'/'+'runResult.txt')
+            if os.path.exists(self.dataDir+'/hadoop/'+ID+'/'+'runResult.txt'):
+                resultFile=open(self.dataDir+'/hadoop/'+ID+'/'+'runResult.txt','r')
                 lines=resultFile.readlines()
                 self.sqlDict['running_output']="".join(lines)
                 resultFile.close()
                 if len(lines)==0:
                     crashed=True
-                elif len(lines)==3:
-                    resultDict={}
-                    for line in lines:
-                        kvp=line.strip().split("\t")
-                        print(line)
-                        if len(kvp)!=2:
-                            break
-                        else:
-                            resultDict[kvp[0]]=kvp[1]
-                    if ('Docker' in resultDict) and resultDict['Docker']=='1' and ('Hadoop' in resultDict) and resultDict['Hadoop']=='1' and ('Hello' in resultDict) and resultDict['Hello']=='2':
-                        rightOutput=True
+                else:
+                    rightOutput=self.checkRightOutput(lines)
             else:
                 crashed=True
             
-            if timeResult['flag']=='ok' and timeResult['last_time']>180000:
+            if timeResult['running_time']>40000:
                 timeOut=True
             
             #check log for system being killed
@@ -165,7 +183,7 @@ class Processor(object):
                     if exceptions:
                         failure_type="Benign"
                     else:
-                        failure_type="No effect"
+                        failure_type="Silent Benign"
                 else:
                     if exceptions:
                         failure_type="Detected Data Corruption"
@@ -177,9 +195,27 @@ class Processor(object):
             if sExceptionResult['error_found']:
                 print(sExceptionResult)
         
-        sql="update injection_merge_hadoop set start_time='%s', end_time='%s',last_time=%s,failure_type='%s',container_id='%s' where fault_id='%s'" % (timeResult.get("start_time",""),timeResult.get("end_time",""),timeResult.get("last_time",0),failure_type,containerID,ID)
+        sql="update injection_original_hadoop set start_time='%s', end_time='%s',last_time=%s,failure_type='%s',container_id='%s' where fault_id='%s'" % (timeResult.get("start_time",""),timeResult.get("end_time",""),timeResult.get("last_time",0),failure_type,containerID,ID)
         self.cursor.execute(sql)
         self.db.commit()
+
+    def checkRightOutput(self, lines):
+        resultDict={}
+        for line in lines:
+            kvp=line.strip().split("\t")
+            if len(kvp)!=2:
+                print(line)
+                break
+            else:
+                resultDict[kvp[0]]=int(kvp[1])
+                
+        allKeys=resultDict.keys()
+        for key in allKeys:
+            if key in self.outputDict and resultDict[key]==self.outputDict[key]:
+                continue
+            else:
+                return False
+        return True
 
     
     def checkExceptionInLogs(self,ID,logFolder):
@@ -200,44 +236,44 @@ class Processor(object):
         for dirpath,subdirs,files in os.walk(directory):
             for filename in files:
                 if filename.endswith(".log"):
-                    tempFile=open(os.path.join(dirpath,filename))
+                    tempFile=open(os.path.join(dirpath,filename),'r')
                     lines=tempFile.readlines()
                     tempFile.close()
                     if len(lines)!=0:
-                        errorDict=self.parseALogFile(filename,dirpath,log_format)
+                        errorDict=self.parseALogFile(filename,dirpath,log_format,ID)
                         if errorDict['error_found']:
                             resultDict['error_found']=True
                             resultDict["error_file"]=resultDict.get("error_file","")+errorDict["error_file"]+"\n"
                             resultDict["error_class"]=resultDict.get("error_class","")+errorDict["error_class"]+"\n"
                 elif filename=="syslog" or filename.endswith(".audit"):
-                    tempFile=open(os.path.join(dirpath,filename))
+                    tempFile=open(os.path.join(dirpath,filename),'r')
                     lines=tempFile.readlines()
                     tempFile.close()
                     if len(lines)!=0:
-                        errorDict=self.parseALogFile(filename,dirpath,log_format)
+                        errorDict=self.parseALogFile(filename,dirpath,log_format,ID)
                         if errorDict['error_found']:
                             resultDict['error_found']=True
                             resultDict["error_file"]=resultDict.get("error_file","")+errorDict["error_file"]+"\n"
                             resultDict["error_class"]=resultDict.get("error_class","")+errorDict["error_class"]+"\n"
                 elif filename=="stderr":
-                    tempFile=open(os.path.join(dirpath,filename))
+                    tempFile=open(os.path.join(dirpath,filename),'r')
                     lines=tempFile.readlines()
                     tempFile.close()
                     if len(lines)!=0:
-                        errorDict=self.parseALogFile(filename,dirpath,log_format3)
+                        errorDict=self.parseALogFile(filename,dirpath,log_format3,ID)
                         if errorDict['error_found']:
                             resultDict['error_found']=True
                             resultDict["error_file"]=resultDict.get("error_file","")+errorDict["error_file"]+"\n"
                             resultDict["error_class"]=resultDict.get("error_class","")+errorDict["error_class"]+"\n" 
                 elif filename=="stdout":
-                    logFile=open(os.path.join(dirpath,filename))
+                    logFile=open(os.path.join(dirpath,filename),'r')
                     lines=logFile.readlines()
                     logFile.close()
                     if len(lines)!=0:
                         resultDict['error_found']=True
                         resultDict["error_file"]=resultDict.get("error_file","")+os.path.join(dirpath,filename)+"\n"
                 elif filename.endswith(".out"):
-                    outFile=open(os.path.join(dirpath,filename))
+                    outFile=open(os.path.join(dirpath,filename),'r')
                     lines=outFile.readlines()
                     outFile.close()
                     if len(lines)!=0 and not lines[0].startswith("ulimit"):
@@ -251,14 +287,14 @@ class Processor(object):
                     resultDict['error_found']=True
                     resultDict["error_file"]=resultDict.get("error_file","")+os.path.join(dirpath,filename)+"\n"
         if resultDict["error_found"]:
-            sql="update injection_merge_hadoop set error_file='%s',error_class='%s' where fault_id='%s'" %(resultDict["error_file"],resultDict["error_class"].replace("'","`"),ID)
+            sql="update injection_original_hadoop set error_file='%s',error_class='%s' where fault_id='%s'" %(resultDict["error_file"],resultDict["error_class"].replace("'","`"),ID)
             self.cursor.execute(sql)
             self.db.commit()
         return resultDict
 
                     
     
-    def parseALogFile(self,filename,parentFolderPath,template):
+    def parseALogFile(self,filename,parentFolderPath,template,ID):
         input_dir = parentFolderPath  # The input directory of log file
         output_dir = parentFolderPath  # The output directory of parsing results
 
@@ -277,16 +313,18 @@ class Processor(object):
 
         parser = log_parser.LogParser(template, indir=input_dir, outdir=output_dir, depth=depth, st=st, rex=regex)
         parser.parse(filename)
-        errorLogDict=self.parseLogSequence(filename,parentFolderPath)
+        errorLogDict=self.parseLogSequence(filename,parentFolderPath,ID)
         return errorLogDict
     
     #generate a log sequence for a log file and report error and fatal level logs
-    def parseLogSequence(self,filename,parentFolderPath):
+    def parseLogSequence(self,filename,parentFolderPath,ID):
+        uploadLogTemplates(self,filename,parentFolderPath,ID)
+
         parseResultDict={}
         parseResultDict["error_found"]=False
         templateIDSequence=[]
         processedLogFilePath=parentFolderPath+"/"+filename+"_structured.csv"
-        processedLogFile=open(processedLogFilePath)
+        processedLogFile=open(processedLogFilePath,'r')
         allLines=processedLogFile.readlines()
         processedLogFile.close()
 
@@ -321,6 +359,25 @@ class Processor(object):
         sequenceFile.write(" ".join(str(x) for x in templateIDSequence)+"\n")
         sequenceFile.close()
         return parseResultDict
+    
+    #parse the log template file for each log file and upload it to the mysql server
+    def uploadLogTemplates(self,filename,parentFolderPath,ID):
+
+        logTmplFilePath=parentFolderPath+"/"+filename+"_templates.csv"
+        logTmplFile=open(processedLogFilePath,'r')
+        allLines=processedLogFile.readlines()
+        processedLogFile.close()
+
+        for line in csv.reader(allLines, quotechar='"', delimiter=',',quoting=csv.QUOTE_ALL, skipinitialspace=True):
+            tmpl_hash=line[0]
+            tmpl_content=line[1].replace("'",'"')
+            sql="insert into hadoop_log_template(hash_key,tmpl_content,source_fi) values ('%s','%s','%s')" % (template_hash,tmpl_content,ID)
+            try:
+                self.cursor.execute(sql2)
+                self.db.commit()
+            except:
+                print("template existed!")
+
 
         
         
@@ -329,15 +386,7 @@ class Processor(object):
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         if len(results)==0:
-            try:
-                sql2="insert into hadoop_log_template(hash_key) values ('%s')" % template_hash
-                self.cursor.execute(sql2)
-                self.db.commit()
-            except:
-                print("log key already existed! "+template_hash)
-            self.cursor.execute(sql)
-            results2=self.cursor.fetchall()
-            return results2[0][0]
+            print("log template doesn't exist!")
         else:
             return results[0][0]
 
@@ -346,9 +395,9 @@ class Processor(object):
     
     def getRunningTime(self,ID):
         resultDict={}
-        timeFilePath=self.dataDir+"/fi/"+ID+"/timeCounter.txt"
+        timeFilePath=self.dataDir+"/hadoop/"+ID+"/timeCounter.txt"
         if os.path.exists(timeFilePath):
-            timeFile=open(self.dataDir+"/fi/"+ID+"/timeCounter.txt")
+            timeFile=open(self.dataDir+"/hadoop/"+ID+"/timeCounter.txt")
             lines=timeFile.readlines()
             timeFile.close()
             if len(lines)==1:
@@ -369,12 +418,20 @@ class Processor(object):
                 resultDict['last_time']=int(time_diffrence)
         else:
             resultDict['flag']="no time file"
+        sql="select running_time from injection_original_hadoop where fault_id='%s'" % ID
+        self.cursor.execute(sql)
+        results=self.cursor.fetchall()
+        if len(results)==0:
+            resultDict['running_time']=-1
+        else:
+            resultDict['running_time']=int(results[0][0])
+        
         return resultDict
 
 
     
     def IDActivated(self,ID):
-        sql="select * from injection_merge_hadoop where fault_id='%s' and activated=1" % ID
+        sql="select * from injection_original_hadoop where fault_id='%s' and activated=1" % ID
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         if len(results)==0:
@@ -393,7 +450,7 @@ class Processor(object):
 
 
 if __name__ == '__main__':
-        processor=Processor("data",sys.argv[1])
+        processor=Processor("/data",sys.argv[1])
         processor.start()
         processor.close()
         

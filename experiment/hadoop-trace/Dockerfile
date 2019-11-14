@@ -40,6 +40,10 @@ RUN mkdir -p hdfs/namenode && \
 #config hadoop cluster
 COPY config/* /tmp/
 
+#copy wordcount data
+RUN mkdir /tmp/input
+COPY data/* /tmp/input/
+
 #hadoop-env.sh --- for JAVA_HOME
 #hadoop-config.sh --- for tracing
 #*.xml for cluster cofig
