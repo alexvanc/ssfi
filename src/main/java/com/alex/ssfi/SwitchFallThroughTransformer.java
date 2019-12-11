@@ -156,7 +156,7 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 			while (units.hasNext()) {
 				Unit unit = units.next();
 				if (unit instanceof SwitchStmt) {
-					if (!withSpefcifiedMethod) {
+					if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
 						allQualifiedMethods.add(method);
 						break;
 					} else {

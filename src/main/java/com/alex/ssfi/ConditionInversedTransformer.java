@@ -366,7 +366,7 @@ public class ConditionInversedTransformer extends BasicTransformer {
 			while (unitItr.hasNext()) {
 				Unit tmpUnit = unitItr.next();
 				if (tmpUnit instanceof IfStmt) {
-					if (!withSpefcifiedMethod) {
+					if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
 						allQualifiedMethods.add(method);
 						break;
 					} else {

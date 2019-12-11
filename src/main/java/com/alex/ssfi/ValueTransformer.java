@@ -275,7 +275,7 @@ public class ValueTransformer extends BasicTransformer {
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
 
-			if (!withSpefcifiedMethod) {
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
 				allQualifiedMethods.add(method);
 			} else {
 				// it's strict, only when the method satisfies the condition and with the

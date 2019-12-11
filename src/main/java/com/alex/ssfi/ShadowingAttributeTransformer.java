@@ -133,7 +133,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {
 			while (locals.hasNext()) {
 				Local local = locals.next();
 				if (fieldsName.contains(local.getName())) {
-					if (!withSpefcifiedMethod) {
+					if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
 						allQualifiedMethods.add(method);
 						break;
 					} else {

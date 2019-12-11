@@ -152,7 +152,7 @@ public class ConditionBorderTransformer extends BasicTransformer {
 					Expr expr = (Expr) tmpIfStmt.getCondition();
 					if ((expr instanceof GtExpr) || (expr instanceof GeExpr) || (expr instanceof LtExpr)
 							|| (expr instanceof LeExpr)) {
-						if (!withSpefcifiedMethod) {
+						if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
 							allQualifiedMethods.add(method);
 							break;
 						} else {

@@ -97,7 +97,7 @@ public class InvokeRemovedTransformer extends BasicTransformer {
 		for (int i = 0; i < length; i++) {
 			SootMethod method = allMethods.get(i);
 
-			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))){
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))){
 				//methods like <init> are used during verification perios, shouldn't be injected
 				allQualifiedMethods.add(method);
 				break;

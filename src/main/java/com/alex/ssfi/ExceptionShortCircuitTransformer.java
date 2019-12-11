@@ -135,7 +135,7 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 			if ((declaredExcepts.size() == 0) && (traps.size() == 0)) {
 				continue;
 			}
-			if (!withSpefcifiedMethod) {
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
 				allQualifiedMethods.add(method);
 			} else {
 				// it's strict, only when the method satisfies the condition and with the
