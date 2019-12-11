@@ -10,10 +10,10 @@ const short with_uuid=1;
 
 const char* controllerip="10.0.0.3";
 const char* controller_service="10.0.0.3/controller.php";
-const char* filePath="/tmp/trace/tracelog.txt";
-const char* debugFilePath="/tmp/trace/tracelog2.txt";
-const char* dataFilePath="/tmp/trace/traceData.dat";
-const char* errFilePath="/tmp/trace/traceErr.txt";
+const char* filePath="/tmp/tracelog.txt";
+const char* debugFilePath="/tmp/tracelog2.txt";
+const char* dataFilePath="/tmp/traceData.dat";
+const char* errFilePath="/tmp/traceErr.txt";
 int ip_list_length=3;
 char *legal_ip_list[]={"127.0.0.1","10.0.0.3","0.0.0.0"};
 

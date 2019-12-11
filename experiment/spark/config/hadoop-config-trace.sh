@@ -311,4 +311,6 @@ if [[ ( "$HADOOP_CLASSPATH" != "" ) && ( "$HADOOP_USE_CLIENT_CLASSLOADER" = "" )
     CLASSPATH=${CLASSPATH}:${HADOOP_CLASSPATH}
   fi
 fi
+
+# the only change to enable tracing in hadoop
 export LD_PRELOAD=/data/hadoop-cluster-docker/config/hook.so

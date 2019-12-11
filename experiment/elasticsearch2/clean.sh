@@ -3,7 +3,7 @@ cd $INPUT
 rm $ES_HOME/lib/$JARNAME.jar
 mv $OUTPUT/$JARNAME.jar.bak $ES_HOME/lib/$JARNAME.jar
 
-rm -rf /tmp/*elasticsearch*
+rm -rf /tmp/*elastic*
 cd /work/search
 #rm -rf $ES_HOME/logs/*
 rm -rf $ES_HOME/logs/*

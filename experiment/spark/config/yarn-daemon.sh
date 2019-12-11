@@ -90,8 +90,9 @@ fi
 
 # some variables
 export YARN_LOGFILE=yarn-$YARN_IDENT_STRING-$command-$HOSTNAME.log
+# no change, but use this file to config the yarn root logger level
 #export YARN_ROOT_LOGGER=${YARN_ROOT_LOGGER:-INFO,RFA}
-export YARN_ROOT_LOGGER=${YARN_ROOT_LOGGER:-ERROR,RFA}
+export YARN_ROOT_LOGGER=${YARN_ROOT_LOGGER:-INFO,RFA}
 log=$YARN_LOG_DIR/yarn-$YARN_IDENT_STRING-$command-$HOSTNAME.out
 pid=$YARN_PID_DIR/yarn-$YARN_IDENT_STRING-$command.pid
 YARN_STOP_TIMEOUT=${YARN_STOP_TIMEOUT:-5}

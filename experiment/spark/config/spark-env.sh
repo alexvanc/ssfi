@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+
+#the only change is setting some environment variables
+export JAVA_HOME=/usr/lib/jvm/zulu-8-amd64
 export SPARK_MASTER_IP=hadoop-master
 export HADOOP_HOME=/usr/local/hadoop
 export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
+#change until here
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with

@@ -31,3 +31,4 @@ create table `injection_record_hadoop`(
         `process_tag` varchar(255),
         `container_id` VARCHAR(511)
 );
+alter table `injection_record_hadoop` add COLUMN `with_bug` TINYINT DEFAULT 0;

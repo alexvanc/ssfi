@@ -1,11 +1,10 @@
-mkdir /tmp/input
-echo "Hello Docker" >/tmp/input/file2.txt
-echo "Hello Hadoop" >/tmp/input/file1.txt
-
 #for hadoop ssh service
 # ssh without key
 ssh-keygen -t rsa -f ~/.ssh/id_rsa -P ''
 cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+# for sshd_config, it's based on the docker version
+rm /etc/ssh/sshd_config
+mv /tmp/sshd_config /etc/ssh/
 service ssh start
 
 #import files into hdfs

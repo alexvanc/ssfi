@@ -17,7 +17,7 @@ import log_parser
 
 class Processor(object):
     def __init__(self,dataDir,prefix):
-        self.db = pymysql.connect("10.58.0.200", "root", "test1234", "new_injection", charset="utf8")
+        self.db = pymysql.connect("10.58.0.200", "root", "test1234", "new_injection2", charset="utf8")
         self.cursor = self.db.cursor()
         self.dataDir=dataDir
         self.prefix=prefix
@@ -28,18 +28,18 @@ class Processor(object):
     def start(self):
         if os.path.exists(self.dataDir):
             self.load_rightOutput()
-            # self.load_containers()
+            self.load_containers()
             # self.load_resource()
         if self.prefix=='act':
             #only process all activated faults
-            sql="select fault_id from injection_original_hadoop where activated=1"
+            sql="select fault_id from injection_record_hadoop where activated=1"
             self.cursor.execute(sql)
             results=self.cursor.fetchall()
             for result in results:
                 self.processOneFI(result[0])
 
         else:
-            dirs=os.listdir(self.dataDir+"/hadoop")
+            dirs=os.listdir(self.dataDir)
             for fi in dirs:
                 self.processOneFI(fi)
     
@@ -58,7 +58,7 @@ class Processor(object):
 
     
     def load_containers(self):
-        containerFile=open(self.dataDir+"/container.log",'r')
+        containerFile=open("container.log",'r')
         lines=containerFile.readlines()
         containerFile.close()
         lineCounter=0
@@ -68,6 +68,21 @@ class Processor(object):
                 container_id=lines[lineCounter+1].strip()
                 self.containerDict[container_name]=container_id
             lineCounter=lineCounter+1
+        self.upload_allContainers()
+    
+    def upload_allContainers(self):
+        allKeys=self.containerDict.keys()
+        for key in allKeys:
+            fault_type=key.split('_')[1]
+            activation_mode=key.split('_')[0]
+            full_name=self.containerDict[key]
+            short_name=full_name[0:12]
+            sql="insert into hadoop_containers(fault_type,activation_mode,full_name,short_name) values ('%s','%s','%s','%s')" % (fault_type,activation_mode,full_name,short_name)
+            try:
+                self.cursor.execute(sql)
+                self.db.commit()
+            except:
+                continue
 
     # def load_resource(self):
     #     monitorFile=open(self.dataDir+"/monitor.log")
@@ -78,33 +93,67 @@ class Processor(object):
         
 
     def getContainerID(self,ID):
-        sql="select fault_type from injection_original_hadoop where fault_id='%s'" % ID
+        sql="select fault_type,activation_mode from injection_record_hadoop where fault_id='%s'" % ID
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         fault_type=results[0][0]
+        activated_mode=results[0][1]
         containerID=""
         if fault_type=="ATTRIBUTE_SHADOWED_FAULT":
-            containerID=self.containerDict['always_shadow']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_shadow']
+            else:
+                containerID=self.containerDict['random_shadow']
         elif fault_type=="CONDITION_BORDER_FAULT":
-            containerID=self.containerDict['always_border']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_border']
+            else:
+                containerID=self.containerDict['random_border']
         elif fault_type=="CONDITION_INVERSED_FAULT":
-            containerID=self.containerDict['always_inverse']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_inverse']
+            else:
+                containerID=self.containerDict['random_inverse']
         elif fault_type=="EXCEPTION_SHORTCIRCUIT_FAULT":
-            containerID=self.containerDict['always_short']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_shadow']
+            else:
+                containerID=self.containerDict['random_shadow']
         elif fault_type=="EXCEPTION_UNCAUGHT_FAULT":
-            containerID=self.containerDict['always_uncaught']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_short']
+            else:
+                containerID=self.containerDict['random_short']
         elif fault_type=="EXCEPTION_UNHANDLED_FAULT":
-            containerID=self.containerDict['always_unhandle']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_unhandle']
+            else:
+                containerID=self.containerDict['random_unhandle']
         elif fault_type=="NULL_FAULT":
-            containerID=self.containerDict['always_null']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_null']
+            else:
+                containerID=self.containerDict['random_null']
         elif fault_type=="SWITCH_FALLTHROUGH_FAULT":
-            containerID=self.containerDict['always_fallthrough']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_fallthrough']
+            else:
+                containerID=self.containerDict['random_fallthrough']
         elif fault_type=="SWITCH_MISS_DEFAULT_FAULT":
-            containerID=self.containerDict['always_default']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_default']
+            else:
+                containerID=self.containerDict['random_default']
         elif fault_type=="UNUSED_INVOKE_REMOVED_FAULT":
-            containerID=self.containerDict['always_remove']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_remove']
+            else:
+                containerID=self.containerDict['random_remove']
         elif fault_type=="Value_FAULT":
-            containerID=self.containerDict['always_value']
+            if activated_mode=='always':
+                containerID=self.containerDict['always_value']
+            else:
+                containerID=self.containerDict['random_value']
         else:
             print("Cannot find containerID") 
         
@@ -116,12 +165,12 @@ class Processor(object):
             return
         ID=fi
         containerID=""
-        # try:
-        #     containerID=self.getContainerID(ID)
-        # except:
-        #     print("Cannot find container for fault: "+ID)
-        #     return
-        if not os.path.exists(self.dataDir+"/hadoop/"+ID):
+        try:
+            containerID=self.getContainerID(ID)
+        except:
+            print("Cannot find container for fault: "+ID)
+            return
+        if not os.path.exists(self.dataDir+"/"+ID):
             return
         
         timeResult=self.getRunningTime(ID)
@@ -132,8 +181,8 @@ class Processor(object):
             exceptions=False
             timeOut=False
             #check whether all hadoop services started
-            if os.path.exists(self.dataDir+'/hadoop/'+ID+'/'+'startresult.log'):
-                outputFile=open(self.dataDir+'/hadoop/'+ID+'/'+'startresult.log','r')
+            if os.path.exists(self.dataDir+'/'+ID+'/'+'startresult.log'):
+                outputFile=open(self.dataDir+'/'+ID+'/'+'startresult.log','r')
                 lines=outputFile.readlines()
                 outputFile.close()
                 if len(lines)!=7:
@@ -141,8 +190,8 @@ class Processor(object):
             else:
                 crashed=True
             #check whether running result is right
-            if os.path.exists(self.dataDir+'/hadoop/'+ID+'/'+'runResult.txt'):
-                resultFile=open(self.dataDir+'/hadoop/'+ID+'/'+'runResult.txt','r')
+            if os.path.exists(self.dataDir+'/'+ID+'/'+'runResult.txt'):
+                resultFile=open(self.dataDir+'/'+ID+'/'+'runResult.txt','r')
                 lines=resultFile.readlines()
                 self.sqlDict['running_output']="".join(lines)
                 resultFile.close()
@@ -153,7 +202,7 @@ class Processor(object):
             else:
                 crashed=True
             
-            if timeResult['running_time']>40000:
+            if timeResult['running_time']>100000:
                 timeOut=True
             
             #check log for system being killed
@@ -181,7 +230,7 @@ class Processor(object):
             else:
                 if rightOutput:
                     if exceptions:
-                        failure_type="Benign"
+                        failure_type="Detected Benign"
                     else:
                         failure_type="Silent Benign"
                 else:
@@ -195,7 +244,7 @@ class Processor(object):
             if sExceptionResult['error_found']:
                 print(sExceptionResult)
         
-        sql="update injection_original_hadoop set start_time='%s', end_time='%s',last_time=%s,failure_type='%s',container_id='%s' where fault_id='%s'" % (timeResult.get("start_time",""),timeResult.get("end_time",""),timeResult.get("last_time",0),failure_type,containerID,ID)
+        sql="update injection_record_hadoop set start_time='%s', end_time='%s',last_time=%s,failure_type='%s',container_id='%s' where fault_id='%s'" % (timeResult.get("start_time",""),timeResult.get("end_time",""),timeResult.get("last_time",0),failure_type,containerID,ID)
         self.cursor.execute(sql)
         self.db.commit()
 
@@ -232,7 +281,7 @@ class Processor(object):
         #rtemplate for audit log
         log_format4=''
 
-        directory=self.dataDir+"/fi/"+ID+"/"+logFolder
+        directory=self.dataDir+'/'+ID+"/"+logFolder
         for dirpath,subdirs,files in os.walk(directory):
             for filename in files:
                 if filename.endswith(".log"):
@@ -286,8 +335,19 @@ class Processor(object):
                     #unexpected log file means error here
                     resultDict['error_found']=True
                     resultDict["error_file"]=resultDict.get("error_file","")+os.path.join(dirpath,filename)+"\n"
+        # here we only check runError.txt, for outputError.txt, we have to confirm whether it's caused by reading result
+        if os.path.exists(self.dataDir+'/'+ID+'/'+'runError.txt'):
+                outputFile=open(self.dataDir+'/'+ID+'/'+'runError.txt','r')
+                lines=outputFile.readlines()
+                outputFile.close()
+                if len(lines)!=3:
+                    resultDict['error_found']=True
+                    resultDict["error_file"]=resultDict.get("error_file","")+self.dataDir+'/'+ID+'/'+'runError.txt'+"\n"
+                    resultDict['error_class']='null'
+                else:
+                    crashed=True
         if resultDict["error_found"]:
-            sql="update injection_original_hadoop set error_file='%s',error_class='%s' where fault_id='%s'" %(resultDict["error_file"],resultDict["error_class"].replace("'","`"),ID)
+            sql="update injection_record_hadoop set error_file='%s',error_class='%s' where fault_id='%s'" %(resultDict["error_file"],resultDict["error_class"].replace("'","`"),ID)
             self.cursor.execute(sql)
             self.db.commit()
         return resultDict
@@ -318,7 +378,7 @@ class Processor(object):
     
     #generate a log sequence for a log file and report error and fatal level logs
     def parseLogSequence(self,filename,parentFolderPath,ID):
-        uploadLogTemplates(self,filename,parentFolderPath,ID)
+        self.uploadLogTemplates(filename,parentFolderPath,ID)
 
         parseResultDict={}
         parseResultDict["error_found"]=False
@@ -351,7 +411,7 @@ class Processor(object):
                 if level=="ERROR" or level=="FATAL":
                     if not parseResultDict['error_found']:
                         parseResultDict['error_found']=True
-                        parseResultDict['error_class']=className
+                        parseResultDict['error_class']=className.replace("'",'"')
                         parseResultDict['error_file']=parentFolderPath+"/"+filename
                 template_id=self.getTemplateID(template_hash)
                 templateIDSequence.append(template_id)
@@ -364,19 +424,21 @@ class Processor(object):
     def uploadLogTemplates(self,filename,parentFolderPath,ID):
 
         logTmplFilePath=parentFolderPath+"/"+filename+"_templates.csv"
-        logTmplFile=open(processedLogFilePath,'r')
-        allLines=processedLogFile.readlines()
-        processedLogFile.close()
+        logTmplFile=open(logTmplFilePath,'r')
+        allLines=logTmplFile.readlines()
+        logTmplFile.close()
 
         for line in csv.reader(allLines, quotechar='"', delimiter=',',quoting=csv.QUOTE_ALL, skipinitialspace=True):
             tmpl_hash=line[0]
             tmpl_content=line[1].replace("'",'"')
-            sql="insert into hadoop_log_template(hash_key,tmpl_content,source_fi) values ('%s','%s','%s')" % (template_hash,tmpl_content,ID)
+            sql="insert into hadoop_log_template(hash_key,tmpl_content,source_fi,source_file) values ('%s','%s','%s','%s')" % (tmpl_hash,tmpl_content.replace("'",'"'),ID,logTmplFilePath)
             try:
-                self.cursor.execute(sql2)
+                self.cursor.execute(sql)
                 self.db.commit()
             except:
-                print("template existed!")
+                # do something meaningless
+                continue
+                # print("template existed!")
 
 
         
@@ -395,9 +457,9 @@ class Processor(object):
     
     def getRunningTime(self,ID):
         resultDict={}
-        timeFilePath=self.dataDir+"/hadoop/"+ID+"/timeCounter.txt"
+        timeFilePath=self.dataDir+'/'+ID+"/timeCounter.txt"
         if os.path.exists(timeFilePath):
-            timeFile=open(self.dataDir+"/hadoop/"+ID+"/timeCounter.txt")
+            timeFile=open(self.dataDir+'/'+ID+"/timeCounter.txt")
             lines=timeFile.readlines()
             timeFile.close()
             if len(lines)==1:
@@ -418,7 +480,7 @@ class Processor(object):
                 resultDict['last_time']=int(time_diffrence)
         else:
             resultDict['flag']="no time file"
-        sql="select running_time from injection_original_hadoop where fault_id='%s'" % ID
+        sql="select running_time from injection_record_hadoop where fault_id='%s'" % ID
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         if len(results)==0:
@@ -431,7 +493,7 @@ class Processor(object):
 
     
     def IDActivated(self,ID):
-        sql="select * from injection_original_hadoop where fault_id='%s' and activated=1" % ID
+        sql="select * from injection_record_hadoop where fault_id='%s' and activated=1" % ID
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         if len(results)==0:
@@ -450,7 +512,7 @@ class Processor(object):
 
 
 if __name__ == '__main__':
-        processor=Processor("/data",sys.argv[1])
+        processor=Processor("/home/alex/data/hadoop2",sys.argv[1])
         processor.start()
         processor.close()
         

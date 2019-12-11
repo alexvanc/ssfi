@@ -2,6 +2,7 @@
   injectionMode: batch
   inputPath: /work/search/hadoop-input
   outputPath: /work/search/hadoop-output
+  dependencyPath: /work/search/all-dependency
   debug: false
   activationMode: always 
   activationRate: 5

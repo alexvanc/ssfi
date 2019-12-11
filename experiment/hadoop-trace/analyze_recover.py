@@ -6,7 +6,7 @@ import os
 class Analyzer(object):
     def __init__(self,injectionFile,activationFile):
 
-        self.db = MySQLdb.connect("10.0.0.3", "root", "Finelab123...", "injection_recovery", charset="utf8")
+        self.db = MySQLdb.connect("39.99.169.20", "alex", "test1234", "injection_recovery", charset="utf8")
         self.cursor = self.db.cursor()
         self.activationFile=activationFile
         self.injectionFile=injectionFile
@@ -59,7 +59,7 @@ class Analyzer(object):
         
         tableColumns=",".join(allKeys)
         valueTml=",".join(valueHolder)
-        insertTemp="insert into injection_record_hadoop2(%s) values(%s)" % (tableColumns, valueTml)
+        insertTemp="insert into injection_record_hadoop(%s) values(%s)" % (tableColumns, valueTml)
         insertSQL=insertTemp % tuple(values)
         try:
             self.cursor.execute(insertSQL)
@@ -72,7 +72,7 @@ class Analyzer(object):
         allKeys=self.countDict.keys()
         for key in allKeys:
             value=self.countDict[key]
-            sql="update injection_record_hadoop2 set activated=1, activated_number=%s where fault_id='%s'" % (value,key)
+            sql="update injection_record_hadoop set activated=1, activated_number=%s where fault_id='%s'" % (value,key)
             self.cursor.execute(sql)
             self.db.commit()
       

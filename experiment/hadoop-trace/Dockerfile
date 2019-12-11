@@ -56,8 +56,6 @@ RUN mkdir ~/.ssh && mv /tmp/ssh_config ~/.ssh/config && \
     mv /tmp/mapred-site.xml $HADOOP_HOME/etc/hadoop/mapred-site.xml && \
     mv /tmp/yarn-site.xml $HADOOP_HOME/etc/hadoop/yarn-site.xml && \
     mv /tmp/hadoop-config-trace.sh $HADOOP_HOME/libexec/hadoop-config.sh && \
-    mv /tmp/yarn-daemon.sh $HADOOP_HOME/sbin/yarn-daemon.sh && \
-    mv /tmp/hadoop-daemon.sh $HADOOP_HOME/sbin/hadoop-daemon.sh && \
     mv /tmp/log4j.properties $HADOOP_HOME/etc/hadoop/log4j.properties && \
     mv /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
     mv /tmp/start-*.sh ~/ && \
@@ -75,6 +73,7 @@ RUN chmod +x ~/start-hadoop.sh && \
 COPY ssfi.jar /work/
 COPY hadoop.tar.gz /tmp/
 COPY hadoop-dependency.tar.gz /tmp/
+#hadoop.tar.gz specify which jars to inject faults
 RUN tar  -C /work/hadoop -xzf /tmp/hadoop.tar.gz
 RUN tar  -C /work/hadoop -xzf /tmp/hadoop-dependency.tar.gz
 

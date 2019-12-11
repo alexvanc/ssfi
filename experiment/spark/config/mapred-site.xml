@@ -6,14 +6,14 @@
     </property>
     <property>
         <name>yarn.app.mapreduce.am.log.level</name>
-        <value>ERROR</value>
+        <value>INFO</value>
     </property>
     <property>
         <name>mapreduce.map.log.level</name>
-        <value>ERROR</value>
+        <value>INFO</value>
     </property>
     <property>
         <name>mapreduce.reduce.log.level</name>
-        <value>ERROR</value>
+        <value>INFO</value>
     </property>
 </configuration>

@@ -78,7 +78,7 @@ class Analyzer(object):
         tuples=lastLine.split("\t")
         for item in tuples:
             key=item.split(":")[0]
-            value=item.split(":")[1].replace("'",'"')
+            value=item.split(":")[1]
             columnKey=""
             
             if(key=="ID"):
@@ -117,11 +117,11 @@ class Analyzer(object):
                 print("Unexpected key: "+key)
                 continue
                 
-            self.sqlDict[columnKey]=item.split(":")[1]
+            self.sqlDict[columnKey]=item.split(":")[1].replace("'",'"')
             
     
     def close(self):
-        self.cursor.close();
+        self.cursor.close()
         self.db.close()
 
 

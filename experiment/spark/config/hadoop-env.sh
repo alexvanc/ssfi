@@ -21,8 +21,11 @@
 # set JAVA_HOME in this file, so that it is correctly defined on
 # remote nodes.
 
+# the first change is about JAVA_HOME
 # The java implementation to use.
-export JAVA_HOME=/docker-java-home
+#export JAVA_HOME=/docker-java-home
+export JAVA_HOME=/usr/lib/jvm/zulu-8-amd64
+#change until here
 
 # The jsvc implementation to use. Jsvc is required to run secure datanodes
 # that bind to privileged ports to provide authentication of data transfer
@@ -48,11 +51,17 @@ done
 # Extra Java runtime options.  Empty by default.
 export HADOOP_OPTS="$HADOOP_OPTS -Djava.net.preferIPv4Stack=true"
 
-export HADOOP_ROOT_LOGGER=ERROR,RFAS
+# the second change is adding a root logger setting with INFO and RFAS
+# but seems not necessary, can be overriden by other files' configuration
+# it has to be RFA rather than RFAS, otherwise there will be no log for HDFS
+export HADOOP_ROOT_LOGGER=INFO,RFA
+# change until here
 
+# the thrid change is switching security ERROR level to INFO level
 # Command specific options appended to HADOOP_OPTS when specified
 export HADOOP_NAMENODE_OPTS="-Dhadoop.security.logger=${HADOOP_SECURITY_LOGGER:-INFO,RFAS} -Dhdfs.audit.logger=${HDFS_AUDIT_LOGGER:-INFO,NullAppender} $HADOOP_NAMENODE_OPTS"
-export HADOOP_DATANODE_OPTS="-Dhadoop.security.logger=ERROR,RFAS $HADOOP_DATANODE_OPTS"
+export HADOOP_DATANODE_OPTS="-Dhadoop.security.logger=INFO,RFAS $HADOOP_DATANODE_OPTS"
+# change until here
 
 export HADOOP_SECONDARYNAMENODE_OPTS="-Dhadoop.security.logger=${HADOOP_SECURITY_LOGGER:-INFO,RFAS} -Dhdfs.audit.logger=${HDFS_AUDIT_LOGGER:-INFO,NullAppender} $HADOOP_SECONDARYNAMENODE_OPTS"
 
