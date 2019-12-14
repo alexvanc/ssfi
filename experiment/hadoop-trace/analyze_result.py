@@ -2,6 +2,7 @@
 import sys
 import MySQLdb
 import os
+from datetime import datetime
 
 class Analyzer(object):
     def __init__(self,ID,runningTime,activationFile):
@@ -26,12 +27,15 @@ class Analyzer(object):
                 activationFile=open(self.activationFile)
                 aLines=activationFile.readlines()
                 activationFile.close()
-                activationNumber=self.parseActivation(aLines)
+                activation_result=self.parseActivation(aLines)
+                activationNumber=activation_result[0]
+                activationTime=activation_result[1]
                 if activationNumber!=0:
                     self.sqlDict['activated']=str(1)
                     self.sqlDict['activated_number']=str(activationNumber)
+                    actived_datetime=datetime.fromtimestamp(activationTime)
+                    self.sqlDict['avtivation_time']=actived_datetime.strftime("%Y-%m-%d %H:%M:%S")
                     
-            
             self.insertIntoDB()
             
                 
@@ -69,10 +73,17 @@ class Analyzer(object):
             tmpLines=lines
         
         counter=0
-        for line in tmpLines:
-            if line.strip()==self.ID:
-                counter=counter+1
-        return counter
+        millSeconds=0
+        try:
+            for line in tmpLines:
+                tuples=line.strip().split(":")
+                if tuples[1].strip()==self.ID:
+                    counter=counter+1
+                    millSeconds=int(tuples[0])
+        except:
+            print(line)
+            return (0,0)
+        return (counter,millSeconds)
             
     def parseInjection(self,lastLine):
         tuples=lastLine.split("\t")

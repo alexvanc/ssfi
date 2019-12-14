@@ -88,13 +88,25 @@ public abstract class BasicTransformer extends BodyTransformer {
 		SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter");
 		Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
 		b.getLocals().add(writer);
+		// create a local variable to store the value time
+		Local mstime = Jimple.v().newLocal("mstime", LongType.v());
+		b.getLocals().add(mstime);
 		SootMethod constructor = fWriterClass.getMethod("void <init>(java.lang.String,boolean)");
 		SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
 		SootMethod closeMethod = Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
-
+		SootMethod currentTimeMethod = Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>");
+		
 		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
 		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
 				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.log"), IntConstant.v(1)));
+		// generate time
+		AssignStmt timeStmt = Jimple.v().newAssignStmt(mstime,
+						Jimple.v().newStaticInvokeExpr(currentTimeMethod.makeRef()));
+		// print time
+		InvokeStmt logTimeStmt = Jimple.v()
+						.newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(), mstime));
+		//print injection ID
+				
 		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
 				StringConstant.v(this.parameters.getID() + "\n")));
 		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
@@ -102,6 +114,8 @@ public abstract class BasicTransformer extends BodyTransformer {
 		List<Stmt> statements = new ArrayList<Stmt>();
 		statements.add(newStmt);
 		statements.add(invStmt);
+		statements.add(timeStmt);
+		statements.add(logTimeStmt);
 		statements.add(logStmt);
 		statements.add(closeStmt);
 		if (!this.parameters.getActivationMode().equals("always")) {

@@ -248,7 +248,7 @@ public class JobHelper {
 
     private static void clean(String ID, String fullClassName, String inputPath, String componentName, String jarName,
             String outputPath) {
-        kill(ID, outputPath);
+    	forceKill(outputPath);
         ProcessBuilder pb = new ProcessBuilder();
         pb.command("bash", "-c", outputPath + "/clean.sh");
         Map<String, String> env = pb.environment();

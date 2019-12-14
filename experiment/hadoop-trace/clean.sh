@@ -14,7 +14,7 @@ rm -rf $HADOOP_HOME/logs
 mv /tmp/*.txt /tmp/hadoop/logs/$ID/
 mv /tmp/startresult.log /tmp/hadoop/logs/$ID/
 rm /tmp/traceData.dat
-rm -rf /tmp/*
+rm -rf /tmp/*Jetty*
 
 
 
