@@ -14,6 +14,7 @@ import com.alex.ssfi.util.RunningParameter;
 import soot.Body;
 import soot.BodyTransformer;
 import soot.Local;
+import soot.LongType;
 import soot.RefType;
 import soot.Scene;
 import soot.SootClass;
@@ -29,11 +30,12 @@ public abstract class BasicTransformer extends BodyTransformer {
 	protected Map<String, String> injectInfo = new HashMap<String, String>();
 	protected RunningParameter parameters;
 	protected final Logger recorder = LogManager.getLogger("inject_recorder");
-	
+
 	public BasicTransformer(RunningParameter parameters) {
-		this.parameters=parameters;
+		this.parameters = parameters;
 
 	}
+
 	public BasicTransformer() {
 	}
 
@@ -44,13 +46,12 @@ public abstract class BasicTransformer extends BodyTransformer {
 	protected boolean foundTargetMethod = false;
 
 	protected String targetMethodSubSignature;
-	
+
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
 
 	}
-	
 
 	protected void recordInjectionInfo() {
 		StringBuffer sBuffer = new StringBuffer();
@@ -64,6 +65,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 		}
 		this.recorder.info(sBuffer.toString());
 	}
+
 	protected String formatInjectionInfo() {
 		StringBuffer sBuffer = new StringBuffer();
 		sBuffer.append("ID:");
@@ -76,6 +78,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 		}
 		return sBuffer.toString();
 	}
+
 	/*
 	 * Print this activation information to a file
 	 */
@@ -83,20 +86,33 @@ public abstract class BasicTransformer extends BodyTransformer {
 		SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter");
 		Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
 		b.getLocals().add(writer);
+		// create a local variable to store the value time
+		Local mstime = Jimple.v().newLocal("mstime", LongType.v());
+		b.getLocals().add(mstime);
 		SootMethod constructor = fWriterClass.getMethod("void <init>(java.lang.String,boolean)");
 		SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
 		SootMethod closeMethod = Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
+		SootMethod currentTimeMethod = Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>");
 
 		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
 		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
 				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.txt"), IntConstant.v(1)));
+		// generate time
+		AssignStmt timeStmt = Jimple.v().newAssignStmt(mstime,
+				Jimple.v().newStaticInvokeExpr(currentTimeMethod.makeRef()));
+		// print time
+		InvokeStmt logTimeStmt = Jimple.v()
+				.newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(), mstime));
+		//print injection ID
 		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
-				StringConstant.v(this.parameters.getID() + "\n")));
+				StringConstant.v(":" + this.parameters.getID() + "\n")));
 		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
 
 		List<Stmt> statements = new ArrayList<Stmt>();
 		statements.add(newStmt);
 		statements.add(invStmt);
+		statements.add(timeStmt);
+		statements.add(logTimeStmt);
 		statements.add(logStmt);
 		statements.add(closeStmt);
 		return statements;
