@@ -163,7 +163,7 @@ public class MCInjectionManager {
         // TODO should guarantee input is the classPath
         String[] args;
         if (this.debugMode) {
-            args = new String[11];
+            args = new String[12];
 
             args[0] = "-cp";
             args[1] = ".:" + input;
@@ -171,13 +171,14 @@ public class MCInjectionManager {
             args[3] = "-p";
             args[4] = "jb";
             args[5] = "use-original-names:true";
-            args[6] = "-f";
-            args[7] = "jimple";
-            args[8] = "-d";
-            args[9] = output;
-            args[10] = classWithPackage;
+            args[6] = "-w";
+            args[7] = "-f";
+            args[8] = "jimple";
+            args[9] = "-d";
+            args[10] = output;
+            args[11] = classWithPackage;
         } else {
-            args = new String[9];
+            args = new String[10];
             args[0] = "-cp";
             String fullClassPath = getAllClassPath(input);
             args[1] = fullClassPath;
@@ -186,10 +187,11 @@ public class MCInjectionManager {
             args[3] = "-p";
             args[4] = "jb";
             args[5] = "use-original-names:true";
+            args[6] = "-w";
 
-            args[6] = "-d";
-            args[7] = output;
-            args[8] = classWithPackage;
+            args[7] = "-d";
+            args[8] = output;
+            args[9] = classWithPackage;
         }
 
         return args;

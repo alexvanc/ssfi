@@ -86,35 +86,49 @@ public abstract class BasicTransformer extends BodyTransformer {
 	 */
 	protected List<Stmt> createActivateStatement(Body b) {
 		SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter");
+		SootClass stringClass=Scene.v().getSootClass("java.lang.String");
 		Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
 		b.getLocals().add(writer);
 		// create a local variable to store the value time
 		Local mstime = Jimple.v().newLocal("mstime", LongType.v());
+		Local mstimeS = Jimple.v().newLocal("mstimeS", RefType.v(stringClass));
 		b.getLocals().add(mstime);
+		b.getLocals().add(mstimeS);
 		SootMethod constructor = fWriterClass.getMethod("void <init>(java.lang.String,boolean)");
+		SootMethod stringConstructor = stringClass.getMethod("void <init>()");
 		SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
 		SootMethod closeMethod = Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
 		SootMethod currentTimeMethod = Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>");
-		
+		SootMethod convertLong2StringMethod=Scene.v().getMethod("<java.lang.Long: java.lang.String toString(long)>");
+
 		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
+		AssignStmt newStringInitStmt = Jimple.v().newAssignStmt(mstimeS, Jimple.v().newNewExpr(RefType.v(stringClass)));
 		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
-				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.log"), IntConstant.v(1)));
+				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.txt"), IntConstant.v(1)));
+		InvokeStmt invStringInitStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(mstimeS, stringConstructor.makeRef()));
+
 		// generate time
 		AssignStmt timeStmt = Jimple.v().newAssignStmt(mstime,
-						Jimple.v().newStaticInvokeExpr(currentTimeMethod.makeRef()));
+				Jimple.v().newStaticInvokeExpr(currentTimeMethod.makeRef()));
+		
+		// convert long time to string time
+		AssignStmt long2String = Jimple.v().newAssignStmt(mstimeS,
+				Jimple.v().newStaticInvokeExpr(convertLong2StringMethod.makeRef(),mstime));
 		// print time
 		InvokeStmt logTimeStmt = Jimple.v()
-						.newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(), mstime));
+				.newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(), mstimeS));
 		//print injection ID
-				
 		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
-				StringConstant.v(this.parameters.getID() + "\n")));
+				StringConstant.v(":" + this.parameters.getID() + "\n")));
 		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
 
 		List<Stmt> statements = new ArrayList<Stmt>();
 		statements.add(newStmt);
+		statements.add(newStringInitStmt);
 		statements.add(invStmt);
+		statements.add(invStringInitStmt);
 		statements.add(timeStmt);
+		statements.add(long2String);
 		statements.add(logTimeStmt);
 		statements.add(logStmt);
 		statements.add(closeStmt);
