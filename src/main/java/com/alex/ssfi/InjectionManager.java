@@ -109,21 +109,21 @@ public class InjectionManager {
 	
 	private String[] buildArgs(String classWithPackage,String input,String output) {
 		//TODO should guarantee input is the classPath 
-		String[]args=new String[11];
+		String[]args=new String[9];
 		args[0]="-cp";
 		args[1]=".:"+input;
 		args[2]="-pp";
 		args[3]="-p";
 		args[4]="jb";
 		args[5]="use-original-names:true";
-		args[6]="-f";
-		args[7]="jimple";
-		args[8]="-d";
-		args[9]=output;
-		args[10]=classWithPackage;
-//        args[6]="-d";
-//        args[7]=output;
-//        args[8]=classWithPackage;
+		// args[6]="-f";
+		// args[7]="jimple";
+		// args[8]="-d";
+		// args[9]=output;
+		// args[10]=classWithPackage;
+       args[6]="-d";
+       args[7]=output;
+       args[8]=classWithPackage;
 		return args;	
 	}
 	

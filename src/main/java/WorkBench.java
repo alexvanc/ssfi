@@ -13,22 +13,22 @@ public class WorkBench {
 	}
 
 	public long calculate(int testNumber) {
-//    	for(int i=0;i<5;i++) {
-//    		this.testNumber=this.testNumber+1;
-////    	}
-//        System.out.println("Calculation result: " + testNumber);
-////        return testNumber;
-//    		return this.testNumber;
-		switch (testNumber) {
-		case 1:
-			this.testNumber = 2;
-			break;
-		case 2:
-			this.testNumber = 3;
-		case 3:
-			this.testNumber = 4;
-		}
-		return this.testNumber;
+   	for(int i=0;i<5;i++) {
+   		this.testNumber=this.testNumber+1;
+   	}
+       System.out.println("Calculation result: " + testNumber);
+//        return testNumber;
+   		return this.testNumber;
+		// switch (testNumber) {
+		// case 1:
+		// 	this.testNumber = 2;
+		// 	break;
+		// case 2:
+		// 	this.testNumber = 3;
+		// case 3:
+		// 	this.testNumber = 4;
+		// }
+		// return this.testNumber;
 	}
 
 	public void tryAndCatch(String flag) {
