@@ -13,7 +13,7 @@ create table `injection_record_hadoop`(
         `action` varchar(255),
         `variable_value` varchar(255),
         `activated` tinyint not null default 0,
-        `avtivation_time` datetime,
+        `activation_time` datetime,
         `activated_number` int default 0,
         `running_output` text,
         `running_error` text,

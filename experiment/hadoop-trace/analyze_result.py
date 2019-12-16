@@ -33,8 +33,8 @@ class Analyzer(object):
                 if activationNumber!=0:
                     self.sqlDict['activated']=str(1)
                     self.sqlDict['activated_number']=str(activationNumber)
-                    actived_datetime=datetime.fromtimestamp(activationTime)
-                    self.sqlDict['avtivation_time']=actived_datetime.strftime("%Y-%m-%d %H:%M:%S")
+                    actived_datetime=datetime.fromtimestamp(activationTime/1000.0)
+                    self.sqlDict['activation_time']=actived_datetime.strftime("%Y-%m-%d %H:%M:%S")
                     
             self.insertIntoDB()
             
