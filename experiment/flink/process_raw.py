@@ -19,7 +19,7 @@ import json
 
 class Processor(object):
     def __init__(self,dataDir):
-        self.db = pymysql.connect("39.99.169.20", "alex", "test1234", "new_injection3", charset="utf8")
+        self.db = pymysql.connect("39.99.169.20", "alex", "fake_passwd", "new_injection3", charset="utf8")
         self.cursor = self.db.cursor()
         self.dataDir=dataDir
         self.outputDict={}

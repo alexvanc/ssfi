@@ -104,7 +104,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
 		AssignStmt newStringInitStmt = Jimple.v().newAssignStmt(mstimeS, Jimple.v().newNewExpr(RefType.v(stringClass)));
 		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
-				StringConstant.v(this.parameters.getOutput() + File.separator + "activation.log"), IntConstant.v(1)));
+				StringConstant.v(this.parameters.getOutput() + File.separator + "logs/activation.log"), IntConstant.v(1)));
 		InvokeStmt invStringInitStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(mstimeS, stringConstructor.makeRef()));
 
 		// generate time

@@ -6,7 +6,7 @@ import os
 class Analyzer(object):
     def __init__(self,injectionFile,activationFile):
 
-        self.db = MySQLdb.connect("39.99.169.20", "alex", "test1234", "injection_recovery", charset="utf8")
+        self.db = MySQLdb.connect("39.99.169.20", "alex", "fake_passwd", "injection_recovery", charset="utf8")
         self.cursor = self.db.cursor()
         self.activationFile=activationFile
         self.injectionFile=injectionFile

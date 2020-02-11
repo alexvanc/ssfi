@@ -19,7 +19,10 @@ class ResourceParser(object):
 
             blocks=content.split("\n\n")
             for block in blocks:
-                self.parseBlock(block)
+                try:
+                    self.parseBlock(block)
+                except:
+                    print(block)
             self.persistResource()
             
                 

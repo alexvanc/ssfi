@@ -16,6 +16,8 @@ const char* dataFilePath="/tmp/traceData.dat";
 const char* errFilePath="/tmp/traceErr.txt";
 int ip_list_length=3;
 char *legal_ip_list[]={"127.0.0.1","10.0.0.3","0.0.0.0"};
+char *legal_ip_prefix="172.17."
+const int legal_ip_prefix_length=5
 
 const char* logRule="logs";
 
@@ -3219,9 +3221,9 @@ int format_uuid(char uuid[ID_LENGTH],char format_uuid[ID_LENGTH]){
 }
 
 long long gettime(){
-    struct timeb t;
-    ftime(&t);
-    return 1000 * t.time + t.millitm;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return 1000000*now.tv_sec+now.tv_usec;
 }
 
 //wether a file descriptor is a socket descriptor
@@ -3410,6 +3412,12 @@ int check_filter(char* on_ip,char* in_ip,int on_port,int in_port){
         if(strcmp(in_ip,legal_ip_list[i])==0){
             internal_in_ip=1;
         }
+    }
+    if (strncmp(on_ip,legal_ip_prefix,legal_ip_prefix_length)==0){
+        internal_on_ip=1;
+    }
+    if (strncmp(in_ip,legal_ip_prefix,legal_ip_prefix_length)==0){
+        internal_in_ip=1;
     }
     if((internal_in_ip==0)||(internal_on_ip==0)){
         return 0;

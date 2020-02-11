@@ -1,0 +1,11 @@
+#! /bin/bash
+cd $INPUT
+mv $COMPONENT/$JARNAME/$TARGET $OUTPUT/$TARGET.bak
+mv $OUTPUT/$TARGET  $COMPONENT/$JARNAME/$TARGET
+cd $COMPONENT/$JARNAME
+jar -cf $JARNAME.jar ./*
+mv /usr/local/spark/jars/$JARNAME.jar $OUTPUT/$JARNAME.jar.bak
+mv $JARNAME.jar /usr/local/spark/jars/
+cd $INPUT
+rm $COMPONENT/$JARNAME/$TARGET
+mv $OUTPUT/$TARGET.bak $COMPONENT/$JARNAME/$TARGET

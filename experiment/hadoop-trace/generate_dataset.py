@@ -21,7 +21,7 @@ import random
 
 class Generator(object):
     def __init__(self,dataDir):
-        self.db = pymysql.connect("39.99.169.20", "alex", "test1234", "new_injection3", charset="utf8")
+        self.db = pymysql.connect("39.99.169.20", "alex", "fake_passwd", "new_injection5", charset="utf8")
         self.cursor = self.db.cursor()
         self.dataDir=dataDir
         self.trainSetDict={}
@@ -72,7 +72,7 @@ class Generator(object):
 
     
     def generateAllAbnormal(self):
-        sql="select fault_id,failure_type from injection_record_hadoop where with_bug=0 and failure_type is not null and failure_type<>''"
+        sql="select fault_id,failure_type from injection_record_hadoop where with_bug=0 and resource_bug_flag=0 and failure_type is not null and failure_type<>''"
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         for result in results:
@@ -81,7 +81,7 @@ class Generator(object):
             self.generate_one_type(fault_id,f_type)
     
     def generateAllNomal(self):
-        sql="select fault_id from injection_record_hadoop where with_bug=0 and activated=0"
+        sql="select fault_id from injection_record_hadoop where with_bug=0 and resource_bug_flag=0 and activated=0 and failure_type=''"
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         for result in results:

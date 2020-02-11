@@ -249,7 +249,7 @@ public class JobHelper {
     private static void clean(String ID, String fullClassName, String inputPath, String componentName, String jarName,
             String outputPath) {
         kill(ID, outputPath);
-    	// forceKill(outputPath);
+    	forceKill(outputPath);
         ProcessBuilder pb = new ProcessBuilder();
         pb.command("bash", "-c", outputPath + "/clean.sh");
         Map<String, String> env = pb.environment();
@@ -296,7 +296,7 @@ public class JobHelper {
         Map<String, String> env = pb.environment();
         env.put("ID", ID);
         env.put("OUTPUT", outputPath);
-        env.put("ACT_FILE", outputPath + File.separatorChar + "activation.log");
+        env.put("ACT_FILE", outputPath + File.separatorChar + "logs/activation.log");
         env.put("RTIME", "" + runningTime);
         pb.redirectOutput(new File("/tmp/analyzeNormal.txt"));
         pb.redirectError(new File("/tmp/analyzeError.txt"));

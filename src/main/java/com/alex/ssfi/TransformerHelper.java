@@ -16,6 +16,7 @@ public class TransformerHelper {
 	public static final int UNUSED_INVOKE_REMOVED_FAULT=8;
 	public static final int CONDITION_BORDER_FAULT=9;
 	public static final int CONDITION_INVERSED_FAULT=10;
+	public static final int SYNC_FAULT=11;
 	
 	public static BodyTransformer getTransformer(String faultType,RunningParameter parameter) {
 		int faultTypeID=getFaultTypeIDByName(faultType);
@@ -42,6 +43,8 @@ public class TransformerHelper {
 			return new ConditionInversedTransformer(parameter);
 		case ATTRIBUTE_SHADOWED_FAULT:
 			return new ShadowingAttributeTransformer(parameter);
+		case SYNC_FAULT:
+			return new SYNCTransformer(parameter);
 		default:
 			return new ReadTransformer(parameter);
 			
@@ -76,6 +79,8 @@ public class TransformerHelper {
 			return CONDITION_BORDER_FAULT;
 		}else if (upperCaseName.equals("CONDITION_INVERSED_FAULT")) {
 			return CONDITION_INVERSED_FAULT;
+		}else if (upperCaseName.equals("SYNC_FAULT")) {
+			return SYNC_FAULT;
 		}else {
 			return -1;
 		}

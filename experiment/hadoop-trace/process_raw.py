@@ -15,27 +15,113 @@ import time
 from shutil import copyfile
 import new_log_parser
 import json
+import extract_resource
 
 
 class Processor(object):
     def __init__(self,dataDir):
-        self.db = pymysql.connect("39.99.169.20", "alex", "test1234", "new_injection3", charset="utf8")
+        self.db = pymysql.connect("10.0.0.49", "alex", "fake_passwd", "new_injection", charset="utf8")
         self.cursor = self.db.cursor()
         self.dataDir=dataDir
         self.outputDict={}
         self.sqlDict={}
         self.containerDict={}
     
+    #extract log template
+    #upload all the containers
     def start_from_zero(self):
         if os.path.exists(self.dataDir):
-            self.load_rightOutput()
-            self.load_containers()
-            # self.load_resource()
-            #iterate all the logFiles to train a log template extraction model
-            self.trainLogTree()
+            input_dir = self.dataDir  # The input directory of log file
+            output_dir = self.dataDir   # The output directory of parsing results
+
+            # Regular expression list for optional preprocessing (default: [])
+            regex = [
+                r'@[a-z0-9]+$',
+                r'[[a-z0-9\-\/]+]',
+                r'{.+}',
+                # r'blk_(|-)[0-9]+',  # block id
+                # r'(/|)([0-9]+\.){3}[0-9]+(:[0-9]+|)(:|)',  # IP
+                r'(\d+\.){3}\d+',
+                r'(?<=[^A-Za-z0-9])(\-?\+?\d+)(?=[^A-Za-z0-9])|[0-9]+$',  # Numbers
+            ]
+            st = 0.5  # Similarity threshold
+            depth = 4  # Depth of all leaf nodes
+
+            parser = new_log_parser.LogParser(log_format=None, indir=None, outdir=None, depth=depth, st=st, rex=regex)
+            parser.loadData()
+            dirs=os.listdir(self.dataDir)
+            counter=0
+            for fi in dirs:
+                self.preprocessOneFI(fi,parser)
+                counter=counter+1
+                if counter % 50 == 0:
+                    print("Processed: " + str(counter))
+            parser.saveData()
+            # self.trainLogTree()
         else:
             print("Invalid folder")
 
+    #upload template
+    #check failures types
+    #parse resource usage for each job
+    #generate log template sequence for each job
+    def start(self,prefix):
+        self.prefix=prefix
+        if os.path.exists(self.dataDir):
+            self.load_rightOutput()
+            self.load_containers()
+            self.load_resource()
+            print("Load resource done!")
+            input_dir = self.dataDir  # The input directory of log file
+            output_dir = self.dataDir   # The output directory of parsing results
+
+            # Regular expression list for optional preprocessing (default: [])
+            regex = [
+                    r'@[a-z0-9]+$',
+                    r'[[a-z0-9\-\/]+]',
+                    r'{.+}',
+                    # r'blk_(|-)[0-9]+',  # block id
+                    # r'(/|)([0-9]+\.){3}[0-9]+(:[0-9]+|)(:|)',  # IP
+                    r'(\d+\.){3}\d+',
+                    r'(?<=[^A-Za-z0-9])(\-?\+?\d+)(?=[^A-Za-z0-9])|[0-9]+$',  # Numbers
+            ]
+            st = 0.5  # Similarity threshold
+            depth = 4  # Depth of all leaf nodes
+
+            parser = new_log_parser.LogParser(log_format=None, indir=None, outdir=None, depth=depth, st=st, rex=regex)
+            parser.loadData()
+            #upload all the template in the log tree
+            # self.uploadLogTemplates(parser)
+            print("Upload templates done!")
+            if self.prefix=='act':
+                #only process all activated faults
+                sql="select fault_id from injection_record_hadoop where activated=1"
+                self.cursor.execute(sql)
+                results=self.cursor.fetchall()
+                for result in results:
+                    self.processOneFI(result[0],parser)
+
+            elif self.prefix=='all':
+                dirs=os.listdir(self.dataDir)
+                counter=0
+                for fi in dirs:
+                    self.processOneFI(fi,parser) 
+                    counter=counter+1
+                    if counter % 50 == 0:
+                        print("Processed: " + str(counter))
+            else:
+                print("Porcess in distributed mode!") 
+                dirs=os.listdir(self.dataDir)
+                counter=0
+                for fi in dirs:
+                    self.processOneFI(fi,parser) 
+                    counter=counter+1
+                    if counter % 50 == 0:
+                        print("Processed: " + str(counter))
+                 
+        else:
+            print("Invalid folder")
+   
     def start_remain(self):
         self.prefix='all'
         self.load_rightOutput()
@@ -64,122 +150,10 @@ class Processor(object):
         results=self.cursor.fetchall()
         for result in results:
             self.processOneFI(result[0],parser)
-    
-    def start_resource(self):
-        self.load_resource()
-        dirs=os.listdir(self.dataDir)
-        for fi in dirs:
-            self.processOneFIResource(fi)
-        
-    
-    def load_resource(self):
-        resourceFile=open("resource.dict","r")
-        self.resourceDict=json.load(resourceFile)
-        resourceFile.close()
-    
-    def processOneFIResource(self,ID):
-        sql="select start_time,running_time,end_time,container_id from injection_record_hadoop where fault_id='%s'" % ID
-        self.cursor.execute(sql)
-        results=self.cursor.fetchall()
-        if len(results)!=1:
-            print("Error 1:"+ID)
-        else:
-            if results[0][0] is None or results[0][0]==results[0][2]:
-                print("Error 2:"+ID)
-            else:
-                allTimeData=self.resourceDict[results[0][3][0:12]]
-                running_time=results[0][1]
-                dataList=[]
-                jobStartTime=results[0][0]
-                jobEndTime=jobStartTime+dt.timedelta(milliseconds=running_time)
-                if ID=='AjoeHkiaaDaliGCDReUc':
-                    # print(allTimeData)
-                    print(jobStartTime)
-                    print(jobEndTime)
-                for timeData in allTimeData:
-                    resourceTime=dt.datetime.strptime(timeData['time'],"%Y-%m-%d %H:%M:%S")
-                    # jobStartTime=dt.datetime.strptime(results[0][0],"%Y-%m-%d %H:%M:%S")
-                    if ID=='AjoeHkiaaDaliGCDReUc':
-                        print(resourceTime)
-                    if resourceTime>=jobStartTime and resourceTime<=jobEndTime:
-                        dataList.append(timeData)
-                resourceDataFile=open(self.dataDir+"/"+ID+"/resource.dat","w")
-                json.dump(dataList,resourceDataFile)
-                
-                resourceDataFile.close()                        
-    
-    
-    def start(self,prefix):
-        self.prefix=prefix
-        if os.path.exists(self.dataDir):
-            self.load_rightOutput()
-            self.load_containers()
-            # self.load_resource()
-        input_dir = self.dataDir  # The input directory of log file
-        output_dir = self.dataDir   # The output directory of parsing results
+            
+   
 
-        # Regular expression list for optional preprocessing (default: [])
-        regex = [
-                r'@[a-z0-9]+$',
-                r'[[a-z0-9\-\/]+]',
-                r'{.+}',
-                # r'blk_(|-)[0-9]+',  # block id
-                # r'(/|)([0-9]+\.){3}[0-9]+(:[0-9]+|)(:|)',  # IP
-                r'(\d+\.){3}\d+',
-                r'(?<=[^A-Za-z0-9])(\-?\+?\d+)(?=[^A-Za-z0-9])|[0-9]+$',  # Numbers
-        ]
-        st = 0.5  # Similarity threshold
-        depth = 4  # Depth of all leaf nodes
-
-        parser = new_log_parser.LogParser(log_format=None, indir=None, outdir=None, depth=depth, st=st, rex=regex)
-        parser.loadData()
-        #upload all the template in the log tree
-        self.uploadLogTemplates(parser)
-        if self.prefix=='act':
-            #only process all activated faults
-            sql="select fault_id from injection_record_hadoop where activated=1"
-            self.cursor.execute(sql)
-            results=self.cursor.fetchall()
-            for result in results:
-                self.processOneFI(result[0],parser)
-
-        else:
-            dirs=os.listdir(self.dataDir)
-            for fi in dirs:
-                self.processOneFI(fi,parser)
-
-
-    
-    def trainLogTree(self):
-        input_dir = self.dataDir  # The input directory of log file
-        output_dir = self.dataDir   # The output directory of parsing results
-
-        # Regular expression list for optional preprocessing (default: [])
-        regex = [
-                r'@[a-z0-9]+$',
-                r'[[a-z0-9\-\/]+]',
-                r'{.+}',
-                # r'blk_(|-)[0-9]+',  # block id
-                # r'(/|)([0-9]+\.){3}[0-9]+(:[0-9]+|)(:|)',  # IP
-                r'(\d+\.){3}\d+',
-                r'(?<=[^A-Za-z0-9])(\-?\+?\d+)(?=[^A-Za-z0-9])|[0-9]+$',  # Numbers
-        ]
-        st = 0.5  # Similarity threshold
-        depth = 4  # Depth of all leaf nodes
-
-        parser = new_log_parser.LogParser(log_format=None, indir=None, outdir=None, depth=depth, st=st, rex=regex)
-        parser.loadData()
-        dirs=os.listdir(self.dataDir)
-        counter=0
-        for fi in dirs:
-            self.iterateOneFIForLog(fi,parser)
-            counter=counter+1
-            if counter % 50 == 0:
-                print("Processed: " + str(counter))
-        parser.saveData()
-        #TO DO: save the built template tree model
-    
-    def iterateOneFIForLog(self,ID,parser):
+    def preprocessOneFILog(self,ID,parser):
         #template for service logs
         log_format = '<UUID> <PID> <Date> <Time> <Level> <Class>: <Content>'
         #template for userlogs
@@ -214,7 +188,7 @@ class Processor(object):
     
     # to parse the wordcount file
     def load_rightOutput(self):
-        wordCountFile=open("input_data.txt",'r')
+        wordCountFile=open("data/input_data.txt",'r')
         lines=wordCountFile.readlines()
         wordCountFile.close()
         lineCounter=len(lines)
@@ -234,7 +208,20 @@ class Processor(object):
                 container_id=lines[lineCounter+1].strip()
                 self.containerDict[container_name]=container_id
             lineCounter=lineCounter+1
-        # self.upload_allContainers()
+        self.upload_allContainers()
+    
+     
+    def load_resource(self):
+        if not os.path.exists("resource.dict"):
+            resource_parser=extract_resource.ResourceParser("monitor.log")
+            resource_parser.parse()
+        resourceFile=open("resource.dict","r")
+        self.resourceDict=json.load(resourceFile)
+        resourceFile.close()
+    
+    def preprocessOneFI(self,ID,parser):
+        self.preprocessOneFILog(ID,parser)
+        # self.preprocessOneFIResource(ID)
     
     def upload_allContainers(self):
         allKeys=self.containerDict.keys()
@@ -251,9 +238,14 @@ class Processor(object):
                 continue
 
 
-        
-
     def getContainerID(self,ID):
+        #temp process for two datasets
+        split_time=datetime.strptime("2019-12-17 13:00:00","%Y-%m-%d %H:%M:%S")
+        ctime=os.path.getmtime(self.dataDir+"/"+ID)
+        create_time=datetime.fromtimestamp(ctime)
+
+        # if (create_time>split_time):
+        #     return ""
         sql="select fault_type,activation_mode from injection_record_hadoop where fault_id='%s'" % ID
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
@@ -315,29 +307,37 @@ class Processor(object):
                 containerID=self.containerDict['always_value']
             else:
                 containerID=self.containerDict['random_value']
+        elif fault_type=="SYNC_FAULT":
+            return "sync"
         else:
             print("Cannot find containerID") 
         #temporary process
-        sql="update injection_record_hadoop set container_id='%s' where fault_id='%s'" % (containerID,ID)
-        self.cursor.execute(sql)
-        self.db.commit()
+        # sql="update injection_record_hadoop set container_id='%s' where fault_id='%s'" % (containerID,ID)
+        # print(sql)
+        # self.cursor.execute(sql)
+        # self.db.commit()
         
         return containerID
 
     
     def processOneFI(self,fi,parser):
+        
+        ID=fi
         if self.prefix!='act' and self.prefix!='all' and not fi.lower().startswith(self.prefix):
             return
-        ID=fi
         containerID=""
+        
+        if not os.path.exists(self.dataDir+"/"+ID):
+            return
         try:
             containerID=self.getContainerID(ID)
+            if containerID=='sync' or containerID=="":
+                return
         except:
             print("Cannot find container for fault: "+ID)
             return
-        if not os.path.exists(self.dataDir+"/"+ID):
-            return
-        
+        # self.processOneFIResource(ID)
+
         timeResult=self.getRunningTime(ID)
         failure_type=""
         if self.IDActivated(ID):
@@ -375,10 +375,12 @@ class Processor(object):
             if kExceptionResult['error_found']:
                 exceptions=True
 
+
             #check log for normal system logs
             nExceptionResult=self.checkExceptionInLogs(ID,"logs",parser)
             if nExceptionResult['error_found']:
                 exceptions=True
+  
             
 
             #decide the final failure_type
@@ -406,16 +408,63 @@ class Processor(object):
 
         else:
             sExceptionResult=self.checkExceptionInLogs(ID,"logs",parser)
-            if sExceptionResult['error_found']:
-                print(sExceptionResult)
+            # if sExceptionResult['error_found']:
+            #     print(sExceptionResult)
         
-        sql="update injection_record_hadoop set start_time='%s', end_time='%s',last_time=%s,failure_type='%s',container_id='%s' where fault_id='%s'" % (timeResult.get("start_time",""),timeResult.get("end_time","2020-10-10 10:10:10"),timeResult.get("last_time",0),failure_type,containerID,ID)
+        sql="update injection_record_hadoop set start_time='%s', end_time='%s',last_time=%s,failure_type='%s',container_id='%s' where fault_id='%s'" % (timeResult.get("start_time","2020-10-10 10:10:10"),timeResult.get("end_time","2020-10-10 10:10:10"),timeResult.get("last_time",0),failure_type,containerID,ID)
         try:
             self.cursor.execute(sql)
             self.db.commit()
         except:
             print(sql)
             # sys.exit()
+    
+    def processOneFIResource(self,ID):
+        sql="select start_time,running_time,end_time,container_id from injection_record_hadoop where fault_id='%s'" % ID
+        self.cursor.execute(sql)
+        results=self.cursor.fetchall()
+        if len(results)!=1:
+            print("Error 1:"+ID)
+        else:
+            # if results[0][0] is None or results[0][0]==results[0][2]:
+            #     print("Error 2:"+ID)
+            # else:
+            allTimeData=self.resourceDict[results[0][3][0:12]]
+            if len(allTimeData)==0:
+                print("No resource usage data found for container: "+results[0][3][0:12])
+            fakeTime=dt.datetime.strptime("2020-10-10 10:10:10","%Y-%m-%d %H:%M:%S")
+            jobStartTime=results[0][0]
+            jobEndTime=results[0][2]
+            running_time=results[0][1]
+            if jobStartTime==fakeTime:
+                print("No start time record: "+ID)
+                sql="update injection_record_hadoop set resource_bug_flag=%s where fault_id='%s'" % (1,ID)
+                self.cursor.execute(sql)
+                self.db.commit()
+                return
+                #mark this job as a job with bug
+                #return
+            if jobEndTime==fakeTime:
+                print("No end time record: "+ID)
+                jobEndTime=jobStartTime+dt.timedelta(milliseconds=running_time)
+
+            
+            dataList=[]
+
+            for timeData in allTimeData:
+                resourceTime=dt.datetime.strptime(timeData['time'],"%Y-%m-%d %H:%M:%S")-dt.timedelta(hours=8)
+                # jobStartTime=dt.datetime.strptime(results[0][0],"%Y-%m-%d %H:%M:%S")
+                if resourceTime>=jobStartTime and resourceTime<=jobEndTime:
+                    dataList.append(timeData)
+            if len(dataList)==0:
+                print("No resource data: "+ID)
+                sql="update injection_record_hadoop set resource_bug_flag=%s where fault_id='%s'" % (2,ID)
+                self.cursor.execute(sql)
+                self.db.commit()
+            resourceDataFile=open(self.dataDir+"/"+ID+"/resource.dat","w")
+            json.dump(dataList,resourceDataFile)
+            
+            resourceDataFile.close()  
 
     def checkRightOutput(self, lines):
         resultDict={}
@@ -441,6 +490,11 @@ class Processor(object):
         resultDict['error_found']=False
         resultDict['error_file']=""
         resultDict['error_class']=""
+        resultDict['error_date']="2020-10-10"
+        resultDict['error_time']="10:10:10.000"
+        error_from_log=0
+        
+
         #template for service logs
         log_format = '<UUID> <PID> <Date> <Time> <Level> <Class>: <Content>'
         #template for user logs
@@ -461,8 +515,17 @@ class Processor(object):
                         errorDict=self.parseALogFile(filename,dirpath,log_format,ID,parser)
                         if errorDict['error_found']:
                             resultDict['error_found']=True
+                            if errorDict['error_log']:
+                                error_from_log=1
                             resultDict["error_file"]=resultDict.get("error_file","")+errorDict["error_file"]+"\n"
                             resultDict["error_class"]=resultDict.get("error_class","")+errorDict["error_class"]+"\n"
+                            resultDict["error_component"]=resultDict.get("error_component","")+errorDict["error_component"]+"\n"
+                            found_time=dt.datetime.strptime(errorDict.get("error_date","2020-10-10")+"_"+errorDict.get("error_time","10:10:10,000"),"%Y-%m-%d_%H:%M:%S.%f")
+                            previous_time=dt.datetime.strptime(resultDict.get("error_date","2020-10-10")+"_"+resultDict.get("error_time","10:10:10,000"),"%Y-%m-%d_%H:%M:%S.%f")
+                            if found_time<previous_time:
+                                resultDict['error_date']=errorDict['error_date']
+                                resultDict['error_time']=errorDict['error_time']
+
                 elif filename=="syslog" or filename.endswith(".audit"):
                     tempFile=open(os.path.join(dirpath,filename),'r')
                     lines=tempFile.readlines()
@@ -471,8 +534,16 @@ class Processor(object):
                         errorDict=self.parseALogFile(filename,dirpath,log_format2,ID,parser)
                         if errorDict['error_found']:
                             resultDict['error_found']=True
+                            if errorDict['error_log']:
+                                error_from_log=1
                             resultDict["error_file"]=resultDict.get("error_file","")+errorDict["error_file"]+"\n"
                             resultDict["error_class"]=resultDict.get("error_class","")+errorDict["error_class"]+"\n"
+                            resultDict["error_component"]=resultDict.get("error_component","")+errorDict["error_component"]+"\n"
+                            found_time=dt.datetime.strptime(errorDict.get("error_date","2020-10-10")+"_"+errorDict.get("error_time","10:10:10,000"),"%Y-%m-%d_%H:%M:%S.%f")
+                            previous_time=dt.datetime.strptime(resultDict.get("error_date","2020-10-10")+"_"+resultDict.get("error_time","10:10:10,000"),"%Y-%m-%d_%H:%M:%S.%f")
+                            if found_time<previous_time:
+                                resultDict['error_date']=errorDict['error_date']
+                                resultDict['error_time']=errorDict['error_time']
                 elif filename=="stderr":
                     tempFile=open(os.path.join(dirpath,filename),'r')
                     lines=tempFile.readlines()
@@ -481,14 +552,23 @@ class Processor(object):
                         errorDict=self.parseALogFile(filename,dirpath,log_format3,ID,parser)
                         if errorDict['error_found']:
                             resultDict['error_found']=True
+                            if errorDict['error_log']:
+                                error_from_log=1
                             resultDict["error_file"]=resultDict.get("error_file","")+errorDict["error_file"]+"\n"
                             resultDict["error_class"]=resultDict.get("error_class","")+errorDict["error_class"]+"\n" 
+                            resultDict["error_component"]=resultDict.get("error_component","")+errorDict["error_component"]+"\n"
+                            found_time=dt.datetime.strptime(errorDict.get("error_date","2020-10-10")+"_"+errorDict.get("error_time","10:10:10,000"),"%Y-%m-%d_%H:%M:%S.%f")
+                            previous_time=dt.datetime.strptime(resultDict.get("error_date","2020-10-10")+"_"+resultDict.get("error_time","10:10:10,000"),"%Y-%m-%d_%H:%M:%S.%f")
+                            if found_time<previous_time:
+                                resultDict['error_date']=errorDict['error_date']
+                                resultDict['error_time']=errorDict['error_time']
                 elif filename=="stdout":
                     logFile=open(os.path.join(dirpath,filename),'r')
                     lines=logFile.readlines()
                     logFile.close()
                     if len(lines)!=0:
                         resultDict['error_found']=True
+                        error_from_log=1
                         resultDict["error_file"]=resultDict.get("error_file","")+os.path.join(dirpath,filename)+"\n"
                 elif filename.endswith(".out"):
                     outFile=open(os.path.join(dirpath,filename),'r')
@@ -497,7 +577,7 @@ class Processor(object):
                     if len(lines)!=0 and not lines[0].startswith("ulimit"):
                         resultDict['error_found']=True
                         resultDict["error_file"]=resultDict.get("error_file","")+os.path.join(dirpath,filename)+"\n"
-                elif filename.endswith(".dat") or filename.endswith(".csv") or filename.endswith(".sequence"):
+                elif filename.endswith(".dat") or filename.endswith(".csv") or filename.endswith(".sequence") or filename.endswith(".sequence2"):
                     #currently not used
                     fullPath=os.path.join(dirpath,filename)
                 else:
@@ -516,7 +596,8 @@ class Processor(object):
                 else:
                     crashed=True
         if resultDict["error_found"]:
-            sql="update injection_record_hadoop set error_file='%s',error_class='%s' where fault_id='%s'" %(resultDict["error_file"],resultDict["error_class"].replace("'","`"),ID)
+            error_time=dt.datetime.strptime(resultDict.get("error_date","2020-10-10")+"_"+resultDict.get("error_time","10:10:10.000"),"%Y-%m-%d_%H:%M:%S.%f")
+            sql="update injection_record_hadoop set error_file='%s',error_class='%s',error_time='%s', error_log=%s, error_component='%s' where fault_id='%s'" %(resultDict["error_file"],resultDict["error_class"].replace("'","`"),error_time.strftime("%Y-%m-%d %H:%M:%S"),error_from_log,resultDict.get("error_component",""),ID)
             try:
                 self.cursor.execute(sql)
                 self.db.commit()
@@ -553,6 +634,8 @@ class Processor(object):
 
         parseResultDict={}
         parseResultDict["error_found"]=False
+        parseResultDict["error_log"]=False
+        parseResultDict["error_component"]=""
         templateIDSequence=[]
         processedLogFilePath=parentFolderPath+"/"+filename+"_structured.csv"
         processedLogFile=open(processedLogFilePath,'r')
@@ -562,7 +645,12 @@ class Processor(object):
         headLine=True
         levelIndex=0
         templateIDIndex=0
+        UUIDIndex=0
         classIndex=0
+        dateIndex=0
+        timeIndex=0
+        component_name=self.getComponentName(filename)
+        sequenceFile=open(parentFolderPath+"/"+filename+".sequence","w+")
         for line in csv.reader(allLines, quotechar='"', delimiter=',',quoting=csv.QUOTE_ALL, skipinitialspace=True):
             if headLine:
                 indexCounter=0
@@ -571,33 +659,79 @@ class Processor(object):
                         levelIndex=indexCounter
                     elif item=="Tmpl_HASH":
                         templateIDIndex=indexCounter
+                    elif item=="UUID":
+                        UUIDIndex=indexCounter
                     elif item=="Class":
                         classIndex=indexCounter
+                    elif item=="Date":
+                        dateIndex=indexCounter
+                    elif item=="Time":
+                        timeIndex=indexCounter
                     indexCounter=indexCounter+1
                 headLine=False
             else:
                 level=line[levelIndex]
                 template_hash=line[templateIDIndex]
-                className=line[classIndex]
-                if level=="ERROR" or level=="FATAL":
+                className=line[classIndex].replace("'",'"')
+                UUID=line[UUIDIndex]
+                
+                if level=="ERROR" or level=="FATAL" or level not in ['INFO','WARN','DEBUG']:
                     if not parseResultDict['error_found']:
                         parseResultDict['error_found']=True
-                        parseResultDict['error_class']=className.replace("'",'"')
+                        if level=="ERROR" or level=='FATAL':
+                            parseResultDict['error_log']=True
+                        parseResultDict['error_class']=className
                         parseResultDict['error_file']=parentFolderPath+"/"+filename
-                # get the tmpl ID from database
+                        parseResultDict['error_date']=line[dateIndex]
+                        parseResultDict['error_time']=line[timeIndex]
+                        parseResultDict['error_component']=component_name
+                        try:
+                            dt.datetime.strptime(parseResultDict.get("error_date","2020-10-10")+"_"+parseResultDict.get("error_time","10:10:10.000"),"%Y-%m-%d_%H:%M:%S.%f")
+                        except:
+                            parseResultDict['error_date']="2020-10-10"
+                            parseResultDict['error_time']="10:10:10.000"
+                            # print("Error time info!"+ID+"-"+parentFolderPath+"/"+filename)
+                            # print(parseResultDict.get("error_date","2020-10-10")+" "+parseResultDict.get("error_time","10:10:10.000"))
                 template_id=self.getTemplateID(template_hash)
+                if template_id==-1:
+                    print(processedLogFilePath)
+                    print(line[templateIDIndex])
+                    sys.exit()
                 templateIDSequence.append(template_id)
-        sequenceFile=open(parentFolderPath+"/"+filename+".sequence","w+")
-        sequenceFile.write(" ".join(str(x) for x in templateIDSequence)+"\n")
+                # get the tmpl ID from database
+                if level in ['INFO','WARN','DEBUG','ERROR','FATAL']:
+                    sequenceFile.write(str(template_id)+" "+UUID+" "+className+" "+line[dateIndex]+"_"+line[timeIndex]+" "+component_name+"\n")        
+        sequenceFile2=open(parentFolderPath+"/"+filename+".sequence2","w+")
+        sequenceFile2.write(" ".join(str(x) for x in templateIDSequence)+"\n")
+        sequenceFile2.close()
         sequenceFile.close()
         return parseResultDict
+    
+    def getComponentName(self,filename):
+        componentName=""
+        if filename.endswith(".log"):
+            if filename.find("secondarynamenode")!=-1:
+                componentName="secondary"
+            elif filename.find("namenode")!=-1:
+                componentName="namenode"
+            elif filename.find("datanode")!=-1:
+                componentName="datanode"
+            elif filename.find("resourcemanager")!=-1:
+                componentName='resourcemanager'
+            elif filename.find("nodemanager"):
+                componentName="nodemanager"
+        elif filename=='stderr' or filename=='stdout' or filename=='syslog':
+                componentName="mapreduce"
+        else:
+            componentName=""
+        return componentName
     
     #get all the log cluster in the log Tree and upload each cluster
     def uploadLogTemplates(self,parser):
         allClusters=parser.getAllCluster()
         for cluster in allClusters:
             template_str=cluster['tmpl']
-            template_id = hashlib.md5(template_str.encode('utf-8')).hexdigest()[0:8]
+            template_id =cluster['hash']
             template_file=cluster['source_file'].replace("'",'"')
             sql="insert into hadoop_log_template(hash_key,tmpl_content,source_file,level,length,token) values('%s','%s','%s','%s',%s,'%s')" % (template_id,template_str.replace("'",'"'),template_file,cluster['level'],cluster['length'],cluster['token'])
 
@@ -605,13 +739,10 @@ class Processor(object):
                 self.cursor.execute(sql)
                 self.db.commit()
             except:
-                print(template_id)
-                print(template_str)
-        
-
-        
-
-
+                pass
+                # print("duplicate log templates")
+                # print(template_id)
+                # print(template_str)
         
         
     def getTemplateID(self,template_hash):
@@ -619,7 +750,8 @@ class Processor(object):
         self.cursor.execute(sql)
         results=self.cursor.fetchall()
         if len(results)==0:
-            print("log template doesn't exist!")
+            print("log template doesn't exist!"+template_hash)
+            return -1
         else:
             return results[0][0]
 
@@ -687,13 +819,15 @@ class Processor(object):
 
 if __name__ == '__main__':
         processor=Processor(sys.argv[1])
-        # processor.start(sys.argv[2])
+        
         # processor.start_from_zero()
+
+        processor.start(sys.argv[2])
 
         #this method should be merged into start
         # processor.start_remain()
         #this method should be merged into processOneFI
-        processor.start_resource()
+        # processor.start_resource()
         processor.close()
         
 

@@ -1,0 +1,46 @@
+#Configuration:
+  injectionMode: batch
+  inputPath: /work/search/hadoop-input
+  outputPath: /work/search/hadoop-output
+  dependencyPath: /work/search/all-dependency
+  debug: false
+  activationMode: always 
+  activationRate: 5
+  timeout: 70000
+  component: 
+  
+  singleRun:
+    type: VALUE_FAULT
+    locationPattern:
+      packageP: org.apache.search.mapreduce.v2.api.records 
+      classP: TaskState
+      methodP: <init>
+      variableP: l1
+    variableScope: parameter
+    variableType: string 
+    action: TO
+    targetValue: 
+    
+  batchRun:
+    counter: 1000
+    distributionMode: fix
+    faultList:
+    -
+       type: VALUE_FAULT
+       distribution: 1
+       locationPattern:
+         packageP: 
+         classP: 
+         methodP: 
+       variableType: 
+       action: 
+ #   -
+ #      type: ExceptionShortCircuit
+ #      distribution: 0.5
+ #      locationPattern:
+ #        packageP: 
+ #        classP: 
+ #        methodP: \*try\*
+ #      exceptionType: THROW
+ #      action: FIRST 
+ 

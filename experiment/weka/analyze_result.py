@@ -7,7 +7,7 @@ class Analyzer(object):
     def __init__(self,ID,runningTime,activationFile):
         self.ID=ID
         self.runningTime=runningTime
-        self.db = MySQLdb.connect("137.82.252.59", "root", "test1234", "injection", charset="utf8")
+        self.db = MySQLdb.connect("137.82.252.59", "root", "fake_passwd", "injection", charset="utf8")
         self.cursor = self.db.cursor()
         self.activationFile=activationFile
         self.sqlDict={}
