@@ -32,7 +32,7 @@ Configuration:
           ref: STDOUT
       - 
         name: inject_recorder
-        level: debug
+        level: info
         additivity: false
         AppenderRef:
           ref: File

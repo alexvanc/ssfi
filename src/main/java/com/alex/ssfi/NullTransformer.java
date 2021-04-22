@@ -56,48 +56,70 @@ public class NullTransformer extends BasicTransformer {
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
 
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
+			Body tmpBody;
+			try {
+				tmpBody = targetMethod.retrieveActiveBody();
+			} catch (Exception e) {
+				logger.info("Retrieve Active Body Failed!");
+				continue;
 			}
+			if (tmpBody == null) {
+				continue;
+			}
+			this.startToInject(tmpBody);
 		}
 
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private synchronized SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis())
-				.nextInt(allMethods.size() - this.methodIndex + 1);
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
+	}
+
+	// for this fault type,we simply assume all methods satisfy the condition
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
+
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
+				allQualifiedMethods.add(method);
+			} else {
+				// it's strict, only when the method satisfies the condition and with the
+				// specified name
+				if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+					allQualifiedMethods.add(method);
+				}
+			}
+		}
+
+		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
 	private void startToInject(Body b) {
 		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "NULL_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
@@ -161,7 +183,7 @@ public class NullTransformer extends BasicTransformer {
 			// TODO
 			// currently local and parameter are processed in the same way, decide later
 			if (this.injectParameterWithNull(b, (Local) variable)) {
-	
+
 				return true;
 			}
 		} else if (scope.equals("field")) {
@@ -171,7 +193,7 @@ public class NullTransformer extends BasicTransformer {
 			}
 		} else if (scope.equals("return")) {
 			if (this.injectReturnWithNull(b, (Stmt) variable)) {
-	
+
 				return true;
 			}
 		}
@@ -201,11 +223,27 @@ public class NullTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -213,7 +251,7 @@ public class NullTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
-						logger.error(this.injectInfo.toString());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -266,11 +304,27 @@ public class NullTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -278,6 +332,7 @@ public class NullTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -290,31 +345,43 @@ public class NullTransformer extends BasicTransformer {
 
 	private boolean injectReturnWithNull(Body b, Stmt stmt) {
 		Chain<Unit> units = b.getUnits();
-		Iterator<Unit> unitIt = units.snapshotIterator();
-		while (unitIt.hasNext()) {
-			Unit tmp = unitIt.next();
-			if (tmp.equals(stmt)) {
-				try {
-					Stmt targetStmt = (Stmt) tmp;
-					if (targetStmt instanceof ReturnStmt) {
-						Stmt nullReturnStmt = this.getNullReturnStatements();
-						units.insertAfter(nullReturnStmt, tmp);
-						List<Stmt> actStmts = this.createActivateStatement(b);
-						for (int i = 0; i < actStmts.size(); i++) {
-							if (i == 0) {
-								units.insertBefore(actStmts.get(i), nullReturnStmt);
-							} else {
-								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-							}
-						}
-						units.remove(tmp);
+
+		try {
+			Stmt targetStmt = stmt;
+			if (targetStmt instanceof ReturnStmt) {
+
+				Stmt nullReturnStmt = this.getNullReturnStatements();
+				units.insertBefore(nullReturnStmt, targetStmt);
+				List<Stmt> preStmts = this.getPrecheckingStmts(b);
+				for (int i = 0; i < preStmts.size(); i++) {
+					if (i == 0) {
+						units.insertBefore(preStmts.get(i), nullReturnStmt);
+					} else {
+						units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 					}
-				} catch (Exception e) {
-					logger.error(e.getMessage());
-					logger.error(this.injectInfo.toString());
-					return false;
 				}
+				List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);
+				for (int i = 0; i < conditionStmts.size(); i++) {
+					if (i == 0) {
+						units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+					} else {
+						units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+					}
+				}
+				List<Stmt> actStmts = this.createActivateStatement(b);
+				for (int i = 0; i < actStmts.size(); i++) {
+					if (i == 0) {
+						units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+					} else {
+						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+					}
+				}
+
 			}
+		} catch (Exception e) {
+			logger.error(e.getMessage());
+			logger.error(this.formatInjectionInfo());
+			return false;
 		}
 
 		return false;
@@ -338,20 +405,37 @@ public class NullTransformer extends BasicTransformer {
 				if ((value instanceof Local) && (value.equivTo(local))) {
 					logger.debug(tmp.toString());
 					try {
+
 						List<Stmt> stmts = this.getNullLocalStatements(local);
 						for (int i = 0; i < stmts.size(); i++) {
 							if (i == 0) {
-								// here is the difference between local and parameter variable
-								units.insertAfter(stmts.get(i), tmp);
+								// before useing the local parameter
+								units.insertBefore(stmts.get(i), tmp);
 							} else {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
+							}
+						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
 							}
 						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -359,6 +443,7 @@ public class NullTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -400,7 +485,8 @@ public class NullTransformer extends BasicTransformer {
 		while (tmpLocalsItr.hasNext()) {
 			Local local = tmpLocalsItr.next();
 			if (!pLocals.contains(local)) {
-				if (this.isTargetedType(local.getType()) && (!local.getName().startsWith("$"))) {
+				if (this.isTargetedType(local.getType()) && (!local.getName().startsWith("$"))
+						&& (!local.getName().equals("this"))) {
 					locals.add(local);
 				}
 			}
@@ -425,7 +511,8 @@ public class NullTransformer extends BasicTransformer {
 
 		// for the variable used by return
 		Type returnType = b.getMethod().getReturnType();
-		if (!(returnType instanceof VoidType)) {
+//		if (!(returnType instanceof VoidType)) {
+		if (this.isTargetedType(returnType)) {
 			Iterator<Unit> unitItr = b.getUnits().snapshotIterator();
 			while (unitItr.hasNext()) {
 				Unit unit = unitItr.next();

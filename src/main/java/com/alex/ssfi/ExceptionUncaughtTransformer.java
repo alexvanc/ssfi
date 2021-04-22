@@ -17,6 +17,7 @@ import soot.RefType;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
+import soot.Trap;
 import soot.Unit;
 import soot.jimple.AssignStmt;
 import soot.jimple.InvokeStmt;
@@ -39,66 +40,19 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
 
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
-			}
+			this.startToInject(targetMethod.getActiveBody());
 		}
-
-//		if (this.parameters.isInjected()) {
-//			return;
-//		}
-//		String methodSignature = b.getMethod().getName();
-//		String targetMethodName = this.parameters.getMethodName();
-//		if ((targetMethodName != null) && (!targetMethodName.equalsIgnoreCase(methodSignature))) {
-//			return;
-//		}
-//		this.injectInfo.put("FaultType", "EXCEPTION_UNCAUGHT_FAULT");
-//		this.injectInfo.put("Package", b.getMethod().getDeclaringClass().getPackageName());
-//		this.injectInfo.put("Class", b.getMethod().getDeclaringClass().getName());
-//		List<String> scopes = getTargetScope(this.parameters.getVariableScope());
-//
-//		// choose one scope to inject faults
-//		// if not specified, then randomly choose
-//		while (true) {
-//			int scopesSize = scopes.size();
-//			if (scopesSize == 0) {
-//				logger.debug("Cannot find qualified scopes");
-//				break;
-//			}
-//			int scopeIndex = new Random().nextInt(scopesSize);
-//			String scope = scopes.get(scopeIndex);
-//			scopes.remove(scopeIndex);
-//
-//			if (this.inject(b, scope)) {
-//				break;
-//			}
-//		}
 
 	}
 
 	private void startToInject(Body b) {
 		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "EXCEPTION_UNCAUGHT_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
@@ -130,19 +84,36 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 		try {
 			Chain<Unit> units = b.getUnits();
 			List<Stmt> stmts = this.getUncaughtStatments(b);
+			Unit firstUnit = units.getFirst();
 			for (int i = 0; i < stmts.size(); i++) {
 				if (i == 0) {
 					// here we add the exception before the first statement of this method
-					units.insertBefore(stmts.get(i), units.getFirst());
+					units.insertBefore(stmts.get(i), firstUnit);
 				} else {
 					units.insertAfter(stmts.get(i), stmts.get(i - 1));
+				}
+			}
+			List<Stmt> preStmts = this.getPrecheckingStmts(b);
+			for (int i = 0; i < preStmts.size(); i++) {
+				if (i == 0) {
+					units.insertBefore(preStmts.get(i), stmts.get(0));
+				} else {
+					units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+				}
+			}
+			List<Stmt> conditionStmts = this.getConditionStmt(b, firstUnit);
+			for (int i = 0; i < conditionStmts.size(); i++) {
+				if (i == 0) {
+					units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+				} else {
+					units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
 				}
 			}
 
 			List<Stmt> actStmts = this.createActivateStatement(b);
 			for (int i = 0; i < actStmts.size(); i++) {
 				if (i == 0) {
-					units.insertBefore(actStmts.get(i), stmts.get(0));
+					units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 				} else {
 					units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 				}
@@ -150,7 +121,7 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 			return true;
 		} catch (Exception e) {
 			logger.error(e.getMessage());
-			logger.error(this.injectInfo.toString());
+			logger.error(this.formatInjectionInfo());
 			return false;
 		}
 	}
@@ -186,16 +157,82 @@ public class ExceptionUncaughtTransformer extends BasicTransformer {
 		return stmts;
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private synchronized SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis())
-				.nextInt(allMethods.size() - this.methodIndex + 1);
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
+	}
+
+	// for this fault type,we simply assume all methods satisfy the condition
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
+			boolean noExceptionDeclared = true;
+			boolean noExceptionCaught = true;
+			List<SootClass> declaredExcepts = method.getExceptions();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Trap> caughtExcepts = tmpBody.getTraps().snapshotIterator();
+			for (int j = 0, size = declaredExcepts.size(); j < size; j++) {
+				SootClass exception = declaredExcepts.get(j);
+				if (exception.getName().equals("java.lang.Exception")) {
+					noExceptionDeclared = false;
+					break;
+				}
+			}
+			while (caughtExcepts.hasNext()) {
+				Trap trap = caughtExcepts.next();
+				// actually it's not that accurate
+				// multiple try-catch blocks and multiple catch blocks for one try-catch is the
+				// same in soot
+				SootClass exception = trap.getException();
+				if (exception.getName().equals("java.lang.Exception")) {
+					noExceptionDeclared = false;
+					break;
+				}
+			}
+			if ((!noExceptionDeclared) || (!noExceptionCaught)) {
+				// Exception are either declared or caught in this method
+				continue;
+			}
+
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
+				allQualifiedMethods.add(method);
+			} else {
+				// it's strict, only when the method satisfies the condition and with the
+				// specified name
+				if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+					allQualifiedMethods.add(method);
+				}
+			}
+		}
+
+		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
 }

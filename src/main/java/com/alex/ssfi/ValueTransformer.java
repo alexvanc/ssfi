@@ -55,47 +55,41 @@ public class ValueTransformer extends BasicTransformer {
 
 	public ValueTransformer() {
 	}
+
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
 
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
+			Body tmpBody;
+			try {
+				tmpBody = targetMethod.retrieveActiveBody();
+			} catch (Exception e) {
+				logger.info("Retrieve Active Body Failed!");
+				continue;
 			}
+			if (tmpBody == null) {
+				continue;
+			}
+			this.startToInject(tmpBody);
 		}
 
 	}
 
 	private void startToInject(Body b) {
 		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "Value_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
 		this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());
 		this.injectInfo.put("Method", targetMethod.getSubSignature());
 		List<String> scopes = getTargetScope(this.parameters.getVariableScope());
-		
+
 		Map<String, List<Object>> allVariables = this.getAllVariables(b);
 		logger.debug("Try to inject Value_FAULT into " + this.injectInfo.get("Package") + " "
 				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
@@ -142,6 +136,7 @@ public class ValueTransformer extends BasicTransformer {
 						int actionIndex = new Random(System.currentTimeMillis()).nextInt(actionSize);
 						String action = possibleActions.get(actionIndex);
 						possibleActions.remove(actionIndex);
+						this.injectInfo.put("Action", action);
 						// finally perform injection
 						if (this.inject(b, scope, variable, action)) {
 							this.parameters.setInjected(true);
@@ -149,8 +144,8 @@ public class ValueTransformer extends BasicTransformer {
 							logger.debug("Succeed to inject Value_FAULT into " + this.injectInfo.get("Package") + " "
 									+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
 							return;
-						}else {
-							logger.debug("Failed injection:+ "+this.formatInjectionInfo());
+						} else {
+							logger.debug("Failed injection:+ " + this.formatInjectionInfo());
 						}
 					}
 				}
@@ -168,14 +163,14 @@ public class ValueTransformer extends BasicTransformer {
 			if (this.injectFieldWithAction(b, field, action)) {
 				return true;
 			}
-		} else if(scope.equals("local")){// inject this fault to local or parameter variables
+		} else if (scope.equals("local")) {// inject this fault to local or parameter variables
 			Local local = (Local) variable;
 			this.injectInfo.put("VariableName", local.getName());
 			this.injectInfo.put("Action", action);
 			if (this.injectLocalWithAction(b, local, action)) {
 				return true;
 			}
-		}else if(scope.equals("parameter")) {
+		} else if (scope.equals("parameter")) {
 			Local local = (Local) variable;
 			this.injectInfo.put("VariableName", local.getName());
 			this.injectInfo.put("Action", action);
@@ -252,18 +247,47 @@ public class ValueTransformer extends BasicTransformer {
 		return qualifiedVariables;
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private synchronized SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis()).nextInt(allMethods.size() - this.methodIndex+1);
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex-1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
 	}
 
+	// for this fault type,we simply assume all methods satisfy the condition
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
 
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
+				allQualifiedMethods.add(method);
+			} else {
+				// it's strict, only when the method satisfies the condition and with the
+				// specified name
+				if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+					allQualifiedMethods.add(method);
+				}
+			}
+		}
+
+		this.allQualifiedMethods = allQualifiedMethods;
+	}
 
 	private boolean injectLocalWithAction(Body b, Local local, String action) {
 		// inject at the beginning or inject after assignment make a lot of difference
@@ -288,11 +312,27 @@ public class ValueTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -300,6 +340,7 @@ public class ValueTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -309,7 +350,7 @@ public class ValueTransformer extends BasicTransformer {
 		}
 		return false;
 	}
-	
+
 	private boolean injectParameterWithAction(Body b, Local local, String action) {
 		// inject at the beginning or inject after assignment make a lot of difference
 		// currently we inject the fault after it is visited once
@@ -323,6 +364,7 @@ public class ValueTransformer extends BasicTransformer {
 				Value value = valueBoxes.next().getValue();
 				if ((value instanceof Local) && (value.equivTo(local))) {
 					logger.debug(tmp.toString());
+					Unit nextUnit = units.getSuccOf(tmp);
 					try {
 						List<Stmt> stmts = this.getLocalStatementsByAction(local, action);
 						for (int i = 0; i < stmts.size(); i++) {
@@ -332,11 +374,27 @@ public class ValueTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, nextUnit);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -344,6 +402,7 @@ public class ValueTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -359,7 +418,10 @@ public class ValueTransformer extends BasicTransformer {
 		if (action.equals("TO")) {
 			String typeName = local.getType().toString();
 			String targetStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", targetStringValue);
+			if (targetStringValue != null) {
+				this.injectInfo.put("VariableValue", targetStringValue);
+			}
+
 			if (typeName.equals("byte")) {
 				byte result = Byte.parseByte(targetStringValue);
 				valueChangeStmt = Jimple.v().newAssignStmt(local, IntConstant.v(result));
@@ -392,7 +454,9 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("ADD")) {
 			String typeName = local.getType().toString();
 			String addedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", addedStringValue);
+			if (addedStringValue != null) {
+				this.injectInfo.put("VariableValue", addedStringValue);
+			}
 			if (typeName.equals("byte")) {
 				byte addedValue = 1;
 				if ((addedStringValue != null) && (addedStringValue != "")) {
@@ -445,7 +509,10 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("SUB")) {
 			String typeName = local.getType().toString();
 			String subedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", subedStringValue);
+			if (subedStringValue != null) {
+				this.injectInfo.put("VariableValue", subedStringValue);
+			}
+
 			if (typeName.equals("byte")) {
 				byte addedValue = 1;
 				if ((subedStringValue != null) && (subedStringValue != "")) {
@@ -517,7 +584,10 @@ public class ValueTransformer extends BasicTransformer {
 		if (action.equals("TO")) {
 			String typeName = field.getType().toString();
 			String targetStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", targetStringValue);
+			if (targetStringValue != null) {
+				this.injectInfo.put("VariableValue", targetStringValue);
+			}
+
 			if (typeName.equals("byte")) {
 //				
 				byte result = Byte.parseByte(targetStringValue);
@@ -598,7 +668,9 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("ADD")) {
 			String typeName = field.getType().toString();
 			String addedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", addedStringValue);
+			if (addedStringValue != null) {
+				this.injectInfo.put("VariableValue", addedStringValue);
+			}
 			if (typeName.equals("byte")) {
 				byte addedValue = 1;
 				if ((addedStringValue != null) && (addedStringValue != "")) {
@@ -626,12 +698,10 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				AddExpr addExp = Jimple.v().newAddExpr(local, IntConstant.v(addedValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef(field.makeRef()));
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
 					changeFieldStmt = Jimple.v()
@@ -647,18 +717,16 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				AddExpr addExp = Jimple.v().newAddExpr(local, IntConstant.v(addedValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
-					
+
 					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);	
+							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);
 				}
 			} else if (typeName.equals("long")) {
 				long addedValue = 1;
@@ -669,20 +737,17 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				AddExpr addExp = Jimple.v().newAddExpr(local, LongConstant.v(addedValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);	
-				}
 
+					changeFieldStmt = Jimple.v()
+							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);
+				}
 
 			} else if (typeName.equals("float")) {
 				float addedValue = 1;
@@ -693,16 +758,14 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				AddExpr addExp = Jimple.v().newAddExpr(local, FloatConstant.v(addedValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
-					
+
 					changeFieldStmt = Jimple.v()
 							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);
 				}
@@ -716,16 +779,14 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				AddExpr addExp = Jimple.v().newAddExpr(local, DoubleConstant.v(addedValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);	
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
-					
+
 					changeFieldStmt = Jimple.v()
 							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);
 				}
@@ -739,7 +800,9 @@ public class ValueTransformer extends BasicTransformer {
 		} else if (action.equals("SUB")) {
 			String typeName = field.getType().toString();
 			String subedStringValue = this.parameters.getVariableValue();
-			this.injectInfo.put("VariableValue", subedStringValue);
+			if (subedStringValue != null) {
+				this.injectInfo.put("VariableValue", subedStringValue);
+			}
 			if (typeName.equals("byte")) {
 				byte subededValue = 1;
 				if ((subedStringValue != null) && (subedStringValue != "")) {
@@ -749,20 +812,17 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				SubExpr addExp = Jimple.v().newSubExpr(local, IntConstant.v(subededValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
-					
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
+
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
 				}
-				
+
 			} else if (typeName.equals("short")) {
 				short subededValue = 1;
 				if ((subedStringValue != null) && (subedStringValue != "")) {
@@ -772,12 +832,10 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				SubExpr addExp = Jimple.v().newSubExpr(local, IntConstant.v(subededValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField){
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
 					changeFieldStmt = Jimple.v()
@@ -793,18 +851,15 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				SubExpr addExp = Jimple.v().newSubExpr(local, IntConstant.v(subededValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
 					changeFieldStmt = Jimple.v()
 							.newAssignStmt(Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()), local);
 				}
-
 
 			} else if (typeName.equals("long")) {
 				long subededValue = 1;
@@ -815,13 +870,11 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				SubExpr addExp = Jimple.v().newSubExpr(local, LongConstant.v(subededValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
 
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
-				}else {
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
 					changeFieldStmt = Jimple.v()
@@ -836,12 +889,10 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				SubExpr addExp = Jimple.v().newSubExpr(local, FloatConstant.v(subededValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef( field.makeRef()));
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);
-				}else {
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
 					changeFieldStmt = Jimple.v()
@@ -857,13 +908,11 @@ public class ValueTransformer extends BasicTransformer {
 				b.getLocals().add(local);
 				SubExpr addExp = Jimple.v().newSubExpr(local, DoubleConstant.v(subededValue));
 				valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);
-				if(isStaticField) {
-					copyFieldStmt = Jimple.v().newAssignStmt(local,
-							Jimple.v().newStaticFieldRef(field.makeRef()));
+				if (isStaticField) {
+					copyFieldStmt = Jimple.v().newAssignStmt(local, Jimple.v().newStaticFieldRef(field.makeRef()));
 
-					changeFieldStmt = Jimple.v()
-							.newAssignStmt(Jimple.v().newStaticFieldRef( field.makeRef()), local);		
-				}else {
+					changeFieldStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(field.makeRef()), local);
+				} else {
 					copyFieldStmt = Jimple.v().newAssignStmt(local,
 							Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
 
@@ -879,7 +928,6 @@ public class ValueTransformer extends BasicTransformer {
 		}
 		return stmts;
 	}
-
 
 	private boolean injectFieldWithAction(Body b, SootField field, String action) {
 		Chain<Unit> units = b.getUnits();
@@ -902,11 +950,27 @@ public class ValueTransformer extends BasicTransformer {
 								units.insertAfter(stmts.get(i), stmts.get(i - 1));
 							}
 						}
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						for (int i = 0; i < preStmts.size(); i++) {
+							if (i == 0) {
+								units.insertBefore(preStmts.get(i), stmts.get(0));
+							} else {
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+							}
+						}
+						List<Stmt> conditionStmts = this.getConditionStmt(b, tmp);
+						for (int i = 0; i < conditionStmts.size(); i++) {
+							if (i == 0) {
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+							} else {
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+							}
+						}
 
 						List<Stmt> actStmts = this.createActivateStatement(b);
 						for (int i = 0; i < actStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), stmts.get(stmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 							} else {
 								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 							}
@@ -914,7 +978,7 @@ public class ValueTransformer extends BasicTransformer {
 						return true;
 					} catch (Exception e) {
 						logger.error(e.getMessage());
-						logger.error(this.injectInfo.toString());
+						logger.error(this.formatInjectionInfo());
 						return false;
 					}
 
@@ -992,7 +1056,6 @@ public class ValueTransformer extends BasicTransformer {
 		}
 		return scopes;
 	}
-
 
 	private List<String> getTargetType(String variableType) {
 		List<String> types = new ArrayList<String>();

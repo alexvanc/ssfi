@@ -1,12 +1,18 @@
 #Configuration:
-  injectionMode: batch
-  inputPath: /home/alex/work/testInput
-  outputPath: /home/alex/work/testOutput
+  inputPath: /home/alex/work/testInput  #it should be a folder of an unpacked jar
+  outputPath: /home/alex/work/testOutput #where the classfile with injected faults will be
+  dependencyPath: /home/alex/work/dependency #it should be a folder of unpacked jars
+  activationLogFile: /tmp/activation.log # record whether an injected fault was ever activated
+  debug: false
+  activationMode: always # always/random
+  activationRate: 5  # the probability(1/n) of fault activation, only activated once, used in random mode
   
+  
+  #if not specified, each configuration item will be randomly assigned a value
   singleRun:
-    type: SWITCH_MISS_DEFAULT_FAULT
+    type: VALUE_FAULT  #one of the 12 fault types
     locationPattern:
-      packageP: 
+      packageP: com.alex.ssfi
       classP: WorkBench
       methodP: calculate
       variableP: 
@@ -14,27 +20,5 @@
     variableType: int
     action: 
     targetValue: 
-    
-  batchRun:
-    counter: 10
-    distributionMode: fix
-    faultList:
-    -
-       type: SWITCH_MISS_DEFAULT_FAULT
-       distribution: 1
-       locationPattern:
-         packageP: 
-         classP: 
-         methodP: 
-       variableType: 
-       action: 
- #   -
- #      type: ExceptionShortCircuit
- #      distribution: 0.5
- #      locationPattern:
- #        packageP: 
- #        classP: 
- #        methodP: \*try\*
- #      exceptionType: THROW
- #      action: FIRST 
+
  

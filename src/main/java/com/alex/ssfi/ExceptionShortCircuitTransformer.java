@@ -41,35 +41,18 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
 
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
-			}
+			this.startToInject(targetMethod.getActiveBody());
 		}
 	}
 
 	private void startToInject(Body b) {
 		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "EXCEPTION_SHORTCIRCUIT_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
@@ -109,92 +92,155 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private synchronized SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis())
-				.nextInt(allMethods.size() - this.methodIndex + 1);
-		// here we currently don't check whether the target method declares or catch
-		// exceptions
-//		SootMethod method=allMethods.get(this.methodIndex + targetMethodIndex - 1);
-//		Body body=method.getActiveBody();
-//		List<SootClass> exceptions=method.getExceptions();
-//		Chain<Trap> traps=body.getTraps();
-//		while((exceptions.size()==0)&&(traps.size()==0)){
-//			targetMethodIndex = new Random(System.currentTimeMillis())
-//					.nextInt(allMethods.size() - this.methodIndex + 1);
-//			method=allMethods.get(this.methodIndex + targetMethodIndex - 1);
-//			body=method.getActiveBody();
-//			exceptions=method.getExceptions();
-//			traps=body.getTraps();
-//		}
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
+	}
+
+	// for this fault type,we extract the methods with declared exceptions or with
+	// try-catch blocks
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
+			List<SootClass> declaredExcepts = method.getExceptions();
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Chain<Trap> traps = tmpBody.getTraps();
+			if ((declaredExcepts.size() == 0) && (traps.size() == 0)) {
+				continue;
+			}
+			if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
+				allQualifiedMethods.add(method);
+			} else {
+				// it's strict, only when the method satisfies the condition and with the
+				// specified name
+				if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+					allQualifiedMethods.add(method);
+				}
+			}
+		}
+
+		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
 	private boolean inject(Body b, String scope) {
-		if (scope.equals("throw")) {
-			if (this.injectThrowShort(b)) {
-	
-				return true;
-			}
-		} else if (scope.equals("catch")) {
-			if (this.injectTryShort(b)) {
-	
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private boolean injectTryShort(Body b) {
-		// randomly choose a trap and directly throw the exception at the beginning of
-		// the trap
-		Chain<Unit> units = b.getUnits();
-		Chain<Trap> traps = b.getTraps();
-		if (traps.size() == 0) {
-			return false;
-		}
-		int targetTrapIndex = new Random(System.currentTimeMillis()).nextInt(traps.size());
-		Iterator<Trap> trapsItr = b.getTraps().snapshotIterator();
-		int index = 0;
 		try {
-			while (trapsItr.hasNext()) {
-				Trap tmpTrap = trapsItr.next();
-				if (index == targetTrapIndex) {
-					Unit beginUnit = tmpTrap.getBeginUnit();
-					List<Stmt> stmts = this.getShortTryStatements(b, tmpTrap);
-					for (int i = 0; i < stmts.size(); i++) {
-						if (i == 0) {
-							// here we add the exception before the first statement if this block
-							units.insertBefore(stmts.get(i), beginUnit);
-						} else {
-							units.insertAfter(stmts.get(i), stmts.get(i - 1));
-						}
-					}
+			if (scope.equals("throw")) {
 
-					List<Stmt> actStmts = this.createActivateStatement(b);
-					for (int i = 0; i < actStmts.size(); i++) {
-						if (i == 0) {
-							units.insertBefore(actStmts.get(i), stmts.get(0));
-						} else {
-							units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-						}
+				List<SootClass> allExceptions = b.getMethod().getExceptions();
+				while (true) {
+					int exceptionSize = allExceptions.size();
+					if (exceptionSize == 0) {
+						break;
 					}
-					return true;
-				} else {
-					index++;
+					int exceptionIndex = new Random(System.currentTimeMillis()).nextInt(exceptionSize);
+					SootClass targetException = allExceptions.get(exceptionIndex);
+					if (this.injectThrowShort(b, targetException)) {
+						return true;
+					}
+				}
+
+			} else if (scope.equals("catch")) {
+
+				List<Trap> allTraps = this.getAllTraps(b);
+				while (true) {
+					int trapsSize = allTraps.size();
+					if (trapsSize == 0) {
+						break;
+					}
+					int trapIndex = new Random(System.currentTimeMillis()).nextInt(trapsSize);
+					Trap targetTrap = allTraps.get(trapIndex);
+					allTraps.remove(trapIndex);
+					if (this.injectTryShort(b, targetTrap)) {
+						return true;
+					}
 				}
 			}
 		} catch (Exception e) {
 			logger.error(e.getMessage());
-			logger.error(this.injectInfo.toString());
+			logger.error(this.formatInjectionInfo());
 			return false;
 		}
 		return false;
+	}
+
+	private List<Trap> getAllTraps(Body b) {
+		List<Trap> allTraps = new ArrayList<Trap>();
+		Iterator<Trap> trapItr = b.getTraps().snapshotIterator();
+		while (trapItr.hasNext()) {
+			allTraps.add(trapItr.next());
+		}
+		return allTraps;
+	}
+
+	private boolean injectTryShort(Body b, Trap trap) {
+		// directly throw the exception at the beginning of the trap
+		Chain<Unit> units = b.getUnits();
+
+		Unit beginUnit = trap.getBeginUnit();
+		List<Stmt> stmts = this.getShortTryStatements(b, trap);
+		for (int i = 0; i < stmts.size(); i++) {
+			if (i == 0) {
+				// here we add the exception before the first statement if this block
+				units.insertBefore(stmts.get(i), beginUnit);
+			} else {
+				units.insertAfter(stmts.get(i), stmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), stmts.get(0));
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, beginUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> actStmts = this.createActivateStatement(b);
+		for (int i = 0; i < actStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+			} else {
+				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+			}
+		}
+		return true;
+
 	}
 
 	private List<Stmt> getShortTryStatements(Body b, Trap trap) {
@@ -203,6 +249,7 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 		this.injectInfo.put("VariableName", exception.getName());
 		// Find the constructor of this Exception
 		SootMethod constructor = null;
+		SootMethod constructor2 = null;
 		Iterator<SootMethod> smIt = exception.getMethods().iterator();
 		while (smIt.hasNext()) {
 			SootMethod tmp = smIt.next();
@@ -212,57 +259,86 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 			if (signature.contains("void <init>(java.lang.String)")) {
 				constructor = tmp;
 			}
+			if (signature.contains("void <init>()")) {
+				constructor2 = tmp;
+			}
+		}
+		if ((constructor == null) && (constructor2 == null)) {
+			// this is a fatal error
+			logger.error("Failed to find a constructor for this exception");
+			return null;
 		}
 		// create a exception and initialize it
-		Local lexception = Jimple.v().newLocal("tmpException", RefType.v(exception));
-		b.getLocals().add(lexception);
-		AssignStmt assignStmt = Jimple.v().newAssignStmt(lexception, Jimple.v().newNewExpr(RefType.v(exception)));
-		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(lexception, constructor.makeRef(),
-				StringConstant.v("Fault Injection")));
-		ThrowStmt throwStmt = Jimple.v().newThrowStmt(lexception);
-		List<Stmt> stmts = new ArrayList<Stmt>();
-		stmts.add(assignStmt);
-		stmts.add(invStmt);
-		stmts.add(throwStmt);
-		return stmts;
+		if (constructor != null) {
+			Local lexception = Jimple.v().newLocal("tmpException", RefType.v(exception));
+			b.getLocals().add(lexception);
+			AssignStmt assignStmt = Jimple.v().newAssignStmt(lexception, Jimple.v().newNewExpr(RefType.v(exception)));
+			InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(lexception,
+					constructor.makeRef(), StringConstant.v("Fault Injection")));
+			ThrowStmt throwStmt = Jimple.v().newThrowStmt(lexception);
+			List<Stmt> stmts = new ArrayList<Stmt>();
+			stmts.add(assignStmt);
+			stmts.add(invStmt);
+			stmts.add(throwStmt);
+			return stmts;
+		} else {
+			Local lexception = Jimple.v().newLocal("tmpException", RefType.v(exception));
+			b.getLocals().add(lexception);
+			AssignStmt assignStmt = Jimple.v().newAssignStmt(lexception, Jimple.v().newNewExpr(RefType.v(exception)));
+			InvokeStmt invStmt = Jimple.v()
+					.newInvokeStmt(Jimple.v().newSpecialInvokeExpr(lexception, constructor2.makeRef()));
+			ThrowStmt throwStmt = Jimple.v().newThrowStmt(lexception);
+			List<Stmt> stmts = new ArrayList<Stmt>();
+			stmts.add(assignStmt);
+			stmts.add(invStmt);
+			stmts.add(throwStmt);
+			return stmts;
+		}
+
 	}
 
-	private boolean injectThrowShort(Body b) {
+	private boolean injectThrowShort(Body b, SootClass exception) {
 		// TODO Auto-generated method stub
-		Chain<Unit> units=b.getUnits();
-		SootMethod sm = b.getMethod();
-		List<SootClass> exceptions = sm.getExceptions();
-		if (exceptions.size() == 0) {
-			return false;
-		}
-		try {
-			int targetExceptionIndex = new Random(System.currentTimeMillis()).nextInt(exceptions.size());
-			SootClass exception = exceptions.get(targetExceptionIndex);
-			this.injectInfo.put("VariableName", exception.getName());
-			List<Stmt> stmts=this.getShortThrowStatements(b, exception);
-			for (int i = 0; i < stmts.size(); i++) {
-				if (i == 0) {
-					// currently we add the field null to the begining of the method
-					units.insertBefore(stmts.get(i), units.getFirst());
-				} else {
-					units.insertAfter(stmts.get(i), stmts.get(i - 1));
-				}
-			}
+		Chain<Unit> units = b.getUnits();
 
-			List<Stmt> actStmts = this.createActivateStatement(b);
-			for (int i = 0; i < actStmts.size(); i++) {
-				if (i == 0) {
-					units.insertBefore(actStmts.get(i), stmts.get(0));
-				} else {
-					units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-				}
+		this.injectInfo.put("VariableName", exception.getName());
+		Unit firstUnit = units.getFirst();
+		List<Stmt> stmts = this.getShortThrowStatements(b, exception);
+		for (int i = 0; i < stmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(stmts.get(i), firstUnit);
+			} else {
+				units.insertAfter(stmts.get(i), stmts.get(i - 1));
 			}
-			return true;
-		} catch (Exception e) {
-			logger.error(e.getMessage());
-			logger.error(this.injectInfo.toString());
-			return false;
 		}
+
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), stmts.get(0));
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+			}
+		}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, firstUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> actStmts = this.createActivateStatement(b);
+		for (int i = 0; i < actStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+			} else {
+				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+			}
+		}
+		return true;
+
 	}
 
 	private List<Stmt> getShortThrowStatements(Body b, SootClass exception) {

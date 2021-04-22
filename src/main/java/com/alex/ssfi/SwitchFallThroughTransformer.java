@@ -31,44 +31,25 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
-		// TODO Auto-generated method stub
 
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
-			}
+			this.startToInject(targetMethod.getActiveBody());
 		}
-
 	}
 
 	private void startToInject(Body b) {
-		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
+
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "SWITCH_FALLTHROUGH_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
 		this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());
 		this.injectInfo.put("Method", targetMethod.getSubSignature());
-		List<String> actions = getTargetAction(this.parameters.getAction());
+		List<String> actions = this.getTargetAction(this.parameters.getAction());
 
 		logger.debug("Try to inject SWITCH_FALLTHROUGH_FAULT into " + this.injectInfo.get("Package") + " "
 				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
@@ -98,15 +79,15 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 				if (this.inject(b, action, switchStmt)) {
 					this.parameters.setInjected(true);
 					this.recordInjectionInfo();
-					logger.debug("Succeed to inject SWITCH_FALLTHROUGH_FAULT into " + this.injectInfo.get("Package") + " "
-							+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
+					logger.debug("Succeed to inject SWITCH_FALLTHROUGH_FAULT into " + this.injectInfo.get("Package")
+							+ " " + this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
 					return;
 				} else {
 					logger.debug("Failed injection:+ " + this.formatInjectionInfo());
 				}
 			}
 
-			logger.debug("Fail to inject"+this.formatInjectionInfo());
+			logger.debug("Fail to inject" + this.formatInjectionInfo());
 		}
 
 	}
@@ -135,16 +116,62 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 		return actions;
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private synchronized SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis())
-				.nextInt(allMethods.size() - this.methodIndex + 1);
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
+	}
+
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				//currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Unit> units = tmpBody.getUnits().snapshotIterator();
+			while (units.hasNext()) {
+				Unit unit = units.next();
+				if (unit instanceof SwitchStmt) {
+					if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
+						allQualifiedMethods.add(method);
+						break;
+					} else {
+						// it's strict, only when the method satisfies the condition and with the
+						// specified name
+						if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+							allQualifiedMethods.add(method);
+							break;
+						}
+					}
+
+				}
+			}
+		}
+		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
 	private boolean inject(Body b, String action, Stmt stmt) {
@@ -153,36 +180,39 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 				SwitchStmt switchStmt = (SwitchStmt) stmt;
 				List<Unit> targets = switchStmt.getTargets();
 				List<Integer> availableTargetIndex = new ArrayList<Integer>();
-				for (int i = 0; i < targets.size() - 1; i++) {
-					availableTargetIndex.add(i);
-				}
-				//find a break target to add the break stmt
-				boolean foundBreakTarget=false;
-				Unit breakStmt=null;
-				Chain<Unit> units=b.getUnits();
-				for(int j=1;j<targets.size();j++) {
-					Unit caseBranch=targets.get(j);
-					Unit stmtBeforeCase=units.getPredOf(caseBranch);
-					if(stmtBeforeCase instanceof GotoStmt) {
-						foundBreakTarget=true;
-						breakStmt=stmtBeforeCase;
+
+				// first we find the default target for the switch cases
+				// the getDefaultTarget() method in soot is not what we want
+				// meanwhile we find the cases can be use for injecting a break
+				boolean foundBreakTarget = false;
+				Unit breakStmt = null;
+				Chain<Unit> units = b.getUnits();
+				for (int j = 1; j < targets.size(); j++) {
+					Unit caseBranch = targets.get(j);
+					Unit stmtBeforeCase = units.getPredOf(caseBranch);
+					if (stmtBeforeCase instanceof GotoStmt) {
+						foundBreakTarget = true;
+						breakStmt = stmtBeforeCase;
+					} else {
+						// find all the branches without a break stmt separating itself and next branch
+						availableTargetIndex.add(j - 1);
 					}
 				}
-				if(!foundBreakTarget) {//couldn't find destination for break
+
+				if (!foundBreakTarget) {// couldn't find destination for any break
 					this.logger.debug(this.formatInjectionInfo());
 					return false;
 				}
-				
 				while (true) {
 					int availableIndexSize = availableTargetIndex.size();
 					if (availableIndexSize == 0) {
 						return false;
 					}
 					int targetIndex = new Random(System.currentTimeMillis()).nextInt(availableIndexSize);
+//					Unit currentTargetUnit = targets.get(availableTargetIndex.get(targetIndex));
+					Unit nextTargetUnit = targets.get(availableTargetIndex.get(targetIndex) + 1);
 					availableTargetIndex.remove(targetIndex);
-					Unit currentTargetUnit = targets.get(targetIndex);
-					Unit nextTargetUnit = targets.get(targetIndex + 1);
-					if (this.injectSwitchBreak(b, currentTargetUnit, nextTargetUnit,breakStmt)) {
+					if (this.injectSwitchBreak(b, nextTargetUnit, breakStmt)) {
 						return true;
 					}
 				}
@@ -197,19 +227,28 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 				SwitchStmt switchStmt = (SwitchStmt) stmt;
 				List<Unit> targets = switchStmt.getTargets();
 				List<Integer> availableTargetIndex = new ArrayList<Integer>();
-				for (int i = 0; i < targets.size() - 1; i++) {
-					availableTargetIndex.add(i);
+
+				// first we find all the branches with a break stmt separating itself with next
+				// branch
+				Chain<Unit> units = b.getUnits();
+				for (int j = 1; j < targets.size(); j++) {
+					Unit caseBranch = targets.get(j);
+					Unit stmtBeforeCase = units.getPredOf(caseBranch);
+					if (stmtBeforeCase instanceof GotoStmt) {
+						availableTargetIndex.add(j - 1);
+					}
 				}
+
 				while (true) {
 					int availableIndexSize = availableTargetIndex.size();
 					if (availableIndexSize == 0) {
 						return false;
 					}
 					int targetIndex = new Random(System.currentTimeMillis()).nextInt(availableIndexSize);
+//					Unit currentTargetUnit = targets.get(availableTargetIndex.get(targetIndex));
+					Unit nextTargetUnit = targets.get(availableTargetIndex.get(targetIndex) + 1);
 					availableTargetIndex.remove(targetIndex);
-					Unit currentTargetUnit = targets.get(targetIndex);
-					Unit nextTargetUnit = targets.get(targetIndex + 1);
-					if (this.injectSwitchFallthrough(b, currentTargetUnit, nextTargetUnit)) {
+					if (this.injectSwitchFallthrough(b, nextTargetUnit)) {
 						return true;
 					}
 				}
@@ -222,79 +261,78 @@ public class SwitchFallThroughTransformer extends BasicTransformer {
 		return false;
 	}
 
-	private boolean injectSwitchFallthrough(Body b, Unit currentTargetUnit, Unit nextTargetUnit) {
+	// delete the break stmt which separates two different cases
+	private boolean injectSwitchFallthrough(Body b, Unit nextTargetUnit) {
 		// TODO Auto-generated method stub
 		Chain<Unit> units = b.getUnits();
-
-		Iterator<Unit> unitsItr = units.snapshotIterator();
-		while (unitsItr.hasNext()) {
-			Unit tmpUnit = unitsItr.next();
-			if (tmpUnit.equals(currentTargetUnit)) {// come to the target case branch
-				boolean withGotoStmt = false;
-				Unit breakStmt = null;
-				while (unitsItr.hasNext()) {
-					Unit nextUnit = unitsItr.next();
-					if (nextUnit.equals(nextTargetUnit)) {// come to the next case branch
-						if (withGotoStmt) {// found a break stmt between two case branch,just delete it
-							List<Stmt> actStmts = this.createActivateStatement(b);
-							for (int i = 0; i < actStmts.size(); i++) {
-								if (i == 0) {
-									units.insertBefore(actStmts.get(i), breakStmt);
-								} else {
-									units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-								}
-							}
-							units.remove(breakStmt);
-							return true;
-						} else {
-							return false;
-						}
-					} else if (nextUnit instanceof GotoStmt) {
-						withGotoStmt = true;
-						breakStmt = nextUnit;
-					}
-				}
+		Unit breakStmt = units.getPredOf(nextTargetUnit);
+		
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), breakStmt);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 			}
 		}
-		return false;
+		List<Stmt> conditionStmts = this.getConditionStmt(b, breakStmt);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+
+		List<Stmt> actStmts = this.createActivateStatement(b);
+		for (int i = 0; i < actStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size()-1));
+			} else {
+				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+			}
+		}
+		GotoStmt skipIfStmt=Jimple.v().newGotoStmt(nextTargetUnit);
+		units.insertAfter(skipIfStmt, actStmts.get(actStmts.size()-1));
+		return true;
 
 	}
 
-	private boolean injectSwitchBreak(Body b, Unit currentTargetUnit, Unit nextTargetUnit, Unit breakUnit) {
+	// add a break stmt between two cases without a break stmt
+	private boolean injectSwitchBreak(Body b, Unit nextTargetUnit, Unit breakUnit) {
 		Chain<Unit> units = b.getUnits();
-
-		Iterator<Unit> unitsItr = units.snapshotIterator();
-		while (unitsItr.hasNext()) {
-			Unit tmpUnit = unitsItr.next();
-			if (tmpUnit.equals(currentTargetUnit)) {// come to the target case branch
-				boolean withGotoStmt = false;
-				while (unitsItr.hasNext()) {
-					Unit nextUnit = unitsItr.next();
-					if (nextUnit.equals(nextTargetUnit)) {// come to the next case branch
-						if (!withGotoStmt) {// found a break stmt between two case branch,just delete it
-							GotoStmt oriBreakStmt=(GotoStmt)breakUnit;
-							GotoStmt breakStmt=Jimple.v().newGotoStmt(oriBreakStmt.getTarget());
-							units.insertBefore(breakStmt, nextUnit);
-							List<Stmt> actStmts = this.createActivateStatement(b);
-							for (int i = 0; i < actStmts.size(); i++) {
-								if (i == 0) {
-									units.insertBefore(actStmts.get(i), breakStmt);
-								} else {
-									units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-								}
-							}
-							return true;
-						} else {
-							return false;
-						}
-					} else if (nextUnit instanceof GotoStmt) {
-						withGotoStmt = true;
-					}
-				}
+		
+		List<Stmt> preStmts = this.getPrecheckingStmts(b);
+		for (int i = 0; i < preStmts.size(); i++) {
+			if (i == 0) {
+				units.insertBefore(preStmts.get(i), nextTargetUnit);
+			} else {
+				units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
 			}
 		}
-		return false;
-	}
+		List<Stmt> conditionStmts = this.getConditionStmt(b, nextTargetUnit);
+		for (int i = 0; i < conditionStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+			} else {
+				units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+			}
+		}
+		List<Stmt> actStmts = this.createActivateStatement(b);
+		for (int i = 0; i < actStmts.size(); i++) {
+			if (i == 0) {
+				units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size()-1));
+			} else {
+				units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+			}
+		}
 
+		GotoStmt oriBreakStmt = (GotoStmt) breakUnit;
+		GotoStmt breakStmt = Jimple.v().newGotoStmt(oriBreakStmt.getTarget());
+		units.insertAfter(breakStmt, actStmts.get(actStmts.size()-1));
+		
+		return true;
+
+	}
 
 }

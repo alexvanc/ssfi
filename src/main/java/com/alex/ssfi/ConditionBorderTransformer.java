@@ -16,6 +16,7 @@ import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.Expr;
 import soot.jimple.GeExpr;
+import soot.jimple.GotoStmt;
 import soot.jimple.GtExpr;
 import soot.jimple.IfStmt;
 import soot.jimple.Jimple;
@@ -36,71 +37,19 @@ public class ConditionBorderTransformer extends BasicTransformer {
 	@Override
 	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
 		// TODO Auto-generated method stub
-		this.methodIndex++;
-		if (this.parameters.isInjected()) {
-			return;
-		}
-		String methodName = b.getMethod().getName();
-		String methodSubSignature = b.getMethod().getSubSignature();
-		String specifiedMethodName = this.parameters.getMethodName();
-		if ((specifiedMethodName == null) || (specifiedMethodName == "")) {// in the random method mode
-			if (!this.foundTargetMethod) {
-				// randomly generate a target method
-				this.generateTargetMethod(b);
-			}
-			if (methodSubSignature.equals(this.targetMethodSubSignature)) {
-				this.startToInject(b);
-			} else {
+		while (!this.parameters.isInjected()) {
+			// in this way, all the FIs are performed in the first function of this class
+			SootMethod targetMethod = this.generateTargetMethod(b);
+			if (targetMethod == null) {
 				return;
 			}
-		} else {// in the customized method mode
-			if (methodName.equalsIgnoreCase(specifiedMethodName)) {
-				this.startToInject(b);
-			} else {
-				return;
-			}
+			this.startToInject(targetMethod.getActiveBody());
 		}
-
-//		if (this.parameters.isInjected()) {
-//			return;
-//		}
-//		String methodSignature = b.getMethod().getName();
-//		String targetMethodName = this.parameters.getMethodName();
-//		if ((targetMethodName != null) && (!targetMethodName.equalsIgnoreCase(methodSignature))) {
-//			return;
-//		}
-//		this.injectInfo.put("FaultType", "CONDITION_BORDER_FAULT");
-//		this.injectInfo.put("Package", b.getMethod().getDeclaringClass().getPackageName());
-//		this.injectInfo.put("Class", b.getMethod().getDeclaringClass().getName());
-//
-//		Chain<Unit> units=b.getUnits();
-//		Iterator<Unit> unitItr=units.iterator();
-//		// choose one scope to inject faults
-//		// if not specified, then randomly choose
-//		while (unitItr.hasNext()) {
-//			Stmt stmt=(Stmt)unitItr.next();
-//			if(stmt instanceof IfStmt) {
-//				if(this.inject(b,stmt)) {
-//					List<Stmt> actStmts = this.createActivateStatement(b);
-//					for (int i = 0; i < actStmts.size(); i++) {
-//						if (i == 0) {
-//							units.insertBefore(actStmts.get(i), stmt);
-//						} else {
-//							units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
-//						}
-//					}
-//					this.parameters.setInjected(true);
-//					this.recordInjectionInfo();
-//					break;
-//				}
-//			}
-//		}
 
 	}
 
 	private void startToInject(Body b) {
 		// no matter this inject fails or succeeds, this targetMethod is already used
-		this.foundTargetMethod = false;
 		SootMethod targetMethod = b.getMethod();
 		this.injectInfo.put("FaultType", "CONDITION_BORDER_FAULT");
 		this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());
@@ -110,6 +59,8 @@ public class ConditionBorderTransformer extends BasicTransformer {
 		logger.debug("Try to inject CONDITION_BORDER_FAULT into " + this.injectInfo.get("Package") + " "
 				+ this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
 
+		// actually we should do the randomization in the inject method
+		// to keep coding stype the same
 		List<Stmt> allCompareStmt = getAllCompareStmt(b);
 		while (true) {
 			int compStmtSize = allCompareStmt.size();
@@ -155,82 +106,220 @@ public class ConditionBorderTransformer extends BasicTransformer {
 
 	}
 
-	private void generateTargetMethod(Body b) {
-		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
-		if (this.methodIndex >= allMethods.size()) {
-			return;
+	private synchronized SootMethod generateTargetMethod(Body b) {
+		if (this.allQualifiedMethods == null) {
+			this.initAllQualifiedMethods(b);
 		}
-		int targetMethodIndex = new Random(System.currentTimeMillis())
-				.nextInt(allMethods.size() - this.methodIndex + 1);
-		this.foundTargetMethod = true;
-		this.targetMethodSubSignature = allMethods.get(this.methodIndex + targetMethodIndex - 1).getSubSignature();
-		return;
+		int leftQualifiedMethodsSize = this.allQualifiedMethods.size();
+		if (leftQualifiedMethodsSize == 0) {
+			return null;
+		}
+		int randomMethodIndex = new Random(System.currentTimeMillis()).nextInt(leftQualifiedMethodsSize);
+		SootMethod targetMethod = this.allQualifiedMethods.get(randomMethodIndex);
+		this.allQualifiedMethods.remove(randomMethodIndex);
+		return targetMethod;
+	}
+
+	// for this fault type,we simply assume all methods satisfy the condition
+	private void initAllQualifiedMethods(Body b) {
+		List<SootMethod> allMethods = b.getMethod().getDeclaringClass().getMethods();
+		List<SootMethod> allQualifiedMethods = new ArrayList<SootMethod>();
+		boolean withSpefcifiedMethod = true;
+		String specifiedMethodName = this.parameters.getMethodName();
+		if ((specifiedMethodName == null) || (specifiedMethodName.equals(""))) {
+			withSpefcifiedMethod = false;
+		}
+		int length = allMethods.size();
+		for (int i = 0; i < length; i++) {
+			SootMethod method = allMethods.get(i);
+			Body tmpBody;
+			try {
+				tmpBody = method.retrieveActiveBody();
+			} catch (Exception e) {
+				// currently we don't know how to deal with this case
+				logger.info("Retrieve Body failed!");
+				continue;
+			}
+			if (tmpBody == null) {
+				continue;
+			}
+			Iterator<Unit> unitItr = tmpBody.getUnits().snapshotIterator();
+			while (unitItr.hasNext()) {
+				Unit tmpUnit = unitItr.next();
+				if (tmpUnit instanceof IfStmt) {
+					// we only deal with <, >, <=, >=
+					IfStmt tmpIfStmt = (IfStmt) tmpUnit;
+					Expr expr = (Expr) tmpIfStmt.getCondition();
+					if ((expr instanceof GtExpr) || (expr instanceof GeExpr) || (expr instanceof LtExpr)
+							|| (expr instanceof LeExpr)) {
+						if ((!withSpefcifiedMethod) && (!method.getName().contains("<init>"))&& (!method.getName().contains("<clinit>"))) {
+							allQualifiedMethods.add(method);
+							break;
+						} else {
+							// it's strict, only when the method satisfies the condition and with the
+							// specified name
+							if (method.getName().equals(specifiedMethodName)) {// method names are strictly compared
+								allQualifiedMethods.add(method);
+								break;
+							}
+						}
+					}
+
+				}
+			}
+
+		}
+
+		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
 	private boolean inject(Body b, Stmt stmt) {
 		// TODO Auto-generated method stub
-		Chain<Unit> units=b.getUnits();
+		Chain<Unit> units = b.getUnits();
 		try {
 			IfStmt ifStmt = (IfStmt) stmt;
-			Expr expr = (Expr) ifStmt.getConditionBox().getValue();
+			IfStmt newIfStmt = (IfStmt) ifStmt.clone();
+			Expr expr = (Expr) newIfStmt.getConditionBox().getValue();
+			Unit nextUnit = units.getSuccOf(ifStmt);
 			if (expr instanceof GtExpr) {
+
 				GtExpr gtExp = (GtExpr) expr;
 				GeExpr geExp = Jimple.v().newGeExpr(gtExp.getOp1(), gtExp.getOp2());
-				ifStmt.setCondition(geExp);
+				newIfStmt.setCondition(geExp);
+				units.insertBefore(newIfStmt, ifStmt);
+
+				List<Stmt> preStmts = this.getPrecheckingStmts(b);
+				for (int i = 0; i < preStmts.size(); i++) {
+					if (i == 0) {
+						units.insertBefore(preStmts.get(i), newIfStmt);
+					} else {
+						units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+					}
+				}
+				List<Stmt> conditionStmts = this.getConditionStmt(b, stmt);
+				for (int i = 0; i < conditionStmts.size(); i++) {
+					if (i == 0) {
+						units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+					} else {
+						units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+					}
+				}
 				List<Stmt> actStmts = this.createActivateStatement(b);
 				for (int i = 0; i < actStmts.size(); i++) {
 					if (i == 0) {
-						units.insertBefore(actStmts.get(i), ifStmt);
+						units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 					} else {
 						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 					}
 				}
+				GotoStmt skipIfStmt = Jimple.v().newGotoStmt(nextUnit);
+				units.insertAfter(skipIfStmt, newIfStmt);
 				return true;
 			} else if (expr instanceof GeExpr) {
 				GeExpr geExp = (GeExpr) expr;
 				GtExpr gtExp = Jimple.v().newGtExpr(geExp.getOp1(), geExp.getOp2());
-				ifStmt.setCondition(gtExp);
+				newIfStmt.setCondition(gtExp);
+				units.insertBefore(newIfStmt, ifStmt);
+
+				List<Stmt> preStmts = this.getPrecheckingStmts(b);
+				for (int i = 0; i < preStmts.size(); i++) {
+					if (i == 0) {
+						units.insertBefore(preStmts.get(i), newIfStmt);
+					} else {
+						units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+					}
+				}
+				List<Stmt> conditionStmts = this.getConditionStmt(b, stmt);
+				for (int i = 0; i < conditionStmts.size(); i++) {
+					if (i == 0) {
+						units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+					} else {
+						units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+					}
+				}
 				List<Stmt> actStmts = this.createActivateStatement(b);
 				for (int i = 0; i < actStmts.size(); i++) {
 					if (i == 0) {
-						units.insertBefore(actStmts.get(i), ifStmt);
+						units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 					} else {
 						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 					}
 				}
+				GotoStmt skipIfStmt = Jimple.v().newGotoStmt(nextUnit);
+				units.insertAfter(skipIfStmt, newIfStmt);
 				return true;
 			} else if (expr instanceof LtExpr) {
 				LtExpr ltExp = (LtExpr) expr;
 				LeExpr leExp = Jimple.v().newLeExpr(ltExp.getOp1(), ltExp.getOp2());
-				ifStmt.setCondition(leExp);
+				newIfStmt.setCondition(leExp);
+				units.insertBefore(newIfStmt, ifStmt);
+
+				List<Stmt> preStmts = this.getPrecheckingStmts(b);
+				for (int i = 0; i < preStmts.size(); i++) {
+					if (i == 0) {
+						units.insertBefore(preStmts.get(i), newIfStmt);
+					} else {
+						units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+					}
+				}
+				List<Stmt> conditionStmts = this.getConditionStmt(b, stmt);
+				for (int i = 0; i < conditionStmts.size(); i++) {
+					if (i == 0) {
+						units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+					} else {
+						units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+					}
+				}
 				List<Stmt> actStmts = this.createActivateStatement(b);
 				for (int i = 0; i < actStmts.size(); i++) {
 					if (i == 0) {
-						units.insertBefore(actStmts.get(i), ifStmt);
+						units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 					} else {
 						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 					}
 				}
+				GotoStmt skipIfStmt = Jimple.v().newGotoStmt(nextUnit);
+				units.insertAfter(skipIfStmt, newIfStmt);
 				return true;
 			} else if (expr instanceof LeExpr) {
 				LeExpr leExp = (LeExpr) expr;
 				LtExpr ltExp = Jimple.v().newLtExpr(leExp.getOp1(), leExp.getOp2());
-				ifStmt.setCondition(ltExp);
+				newIfStmt.setCondition(ltExp);
+				units.insertBefore(newIfStmt, ifStmt);
+
+				List<Stmt> preStmts = this.getPrecheckingStmts(b);
+				for (int i = 0; i < preStmts.size(); i++) {
+					if (i == 0) {
+						units.insertBefore(preStmts.get(i), newIfStmt);
+					} else {
+						units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+					}
+				}
+				List<Stmt> conditionStmts = this.getConditionStmt(b, stmt);
+				for (int i = 0; i < conditionStmts.size(); i++) {
+					if (i == 0) {
+						units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+					} else {
+						units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+					}
+				}
 				List<Stmt> actStmts = this.createActivateStatement(b);
 				for (int i = 0; i < actStmts.size(); i++) {
 					if (i == 0) {
-						units.insertBefore(actStmts.get(i), ifStmt);
+						units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
 					} else {
 						units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
 					}
 				}
+				GotoStmt skipIfStmt = Jimple.v().newGotoStmt(nextUnit);
+				units.insertAfter(skipIfStmt, newIfStmt);
 				return true;
 			}
 		} catch (Exception e) {
 			logger.error(e.getMessage());
+			logger.error(this.formatInjectionInfo());
 		}
 		return false;
 	}
-
 
 }
