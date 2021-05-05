@@ -21,42 +21,38 @@ import soot.SootClass;
 import soot.Transform;
 
 public class InjectionManager {
-	private static final Logger logger=LogManager.getLogger(InjectionManager.class);
-//	private static final Logger recorder=LogManager.getLogger("inject_recorder");
-	
-	private static InjectionManager instance = new InjectionManager();
-	private boolean debugMode = false;
-	private String dependencyPath;
+    private static final Logger logger = LogManager.getLogger(InjectionManager.class);
+    // private static final Logger recorder=LogManager.getLogger("inject_recorder");
 
-	private InjectionManager() {
-	}
+    private static InjectionManager instance = new InjectionManager();
+    private boolean debugMode = false;
+    private String dependencyPath;
 
-	public static InjectionManager getManager(){
-		return instance;
-	}
-	
-	public void peformInjection(Configuration config) {
-		this.debugMode = config.isDebug();
-		this.dependencyPath = config.getDependencyPath();
-		String inputPath=config.getInputPath();
-		String outputPath=config.getOutputPath();
-		SingleRun singleInjection=config.getSingleRun();
+    private InjectionManager() {
+    }
+
+    public static InjectionManager getManager() {
+        return instance;
+    }
+
+    public boolean peformInjection(Configuration config) {
+        this.debugMode = config.isDebug();
+        this.dependencyPath = config.getDependencyPath();
+        String inputPath = config.getInputPath();
         List<String> allClassName;
-        allClassName = this.getFullClassName(inputPath, singleInjection.getPackagePattern(),
-                singleInjection.getClassPattern());
+        allClassName = this.getFullClassName(inputPath, config.getPackagePattern(), config.getClassPattern());
 
         if ((allClassName == null) || allClassName.size() == 0) {
             logger.error("Failed to find a posssible targeting class file!");
-            // generate unqualified report
-            return;
+            return false;
         }
         logger.debug("Prepare to inject one fault with possible classes number" + allClassName.size());
         while (true) {
             int length = allClassName.size();
             if (length == 0) {
                 // generate unqualified report
-                logger.debug("Failed to inject one fault");
-                return;
+                logger.error("Failed to find a qualified class to inject a fault!");
+                return false;
             }
             int index = new Random().nextInt(length);
 
@@ -64,46 +60,45 @@ public class InjectionManager {
             allClassName.remove(index);
             int start = targetPath.indexOf(inputPath) + inputPath.length() + 1;
             int end = targetPath.indexOf(".class");
-            String classWithPackge = targetPath.substring(start, end).replace(File.separatorChar, '.');
-            if (this.injectFault(singleInjection, classWithPackge, inputPath, outputPath, config.getActivationMode(), config.getActivationRate(),config.getActivationLogFile())) {
-                logger.debug("Succeed to inject one fault");
-                return;
+            String classWithPackage = targetPath.substring(start, end).replace(File.separatorChar, '.');
+            RunningParameter parameters = new RunningParameter(config, classWithPackage);
+            if (this.injectFault(parameters)) {
+                logger.info("Succeed to inject one fault");
+                return true;
             }
         }
-	}
-	
+    }
 
-    private boolean injectFault(SingleRun singleInjection, String classWithPackage, String input, String output,
-            String activationMode, int activationRate,String activationLogFile) {
-        
-		Scene.v().addBasicClass("java.io.FileWriter", SootClass.SIGNATURES);
-		Scene.v().addBasicClass("java.io.Writer", SootClass.SIGNATURES);
-		Scene.v().addBasicClass("java.lang.System", SootClass.SIGNATURES);
-		Scene.v().addBasicClass("java.lang.String", SootClass.SIGNATURES);
-		Scene.v().addBasicClass("java.lang.Long", SootClass.SIGNATURES);
-		Scene.v().addBasicClass("java.io.OutputStreamWriter", SootClass.SIGNATURES);
+    private boolean injectFault(RunningParameter parameters) {
 
-        RunningParameter parameter = new RunningParameter(singleInjection, output, activationMode, activationRate,activationLogFile);
-        logger.debug("Start to inject: " + parameter.getID() + " with " + singleInjection.getType() + " into "
-                + classWithPackage);
-        BodyTransformer transformer = TransformerHelper.getTransformer(singleInjection.getType(), parameter);
+        Scene.v().addBasicClass("java.io.FileWriter", SootClass.SIGNATURES);
+        Scene.v().addBasicClass("java.io.Writer", SootClass.SIGNATURES);
+        Scene.v().addBasicClass("java.lang.System", SootClass.SIGNATURES);
+        Scene.v().addBasicClass("java.lang.String", SootClass.SIGNATURES);
+        Scene.v().addBasicClass("java.lang.Long", SootClass.SIGNATURES);
+        Scene.v().addBasicClass("java.io.OutputStreamWriter", SootClass.SIGNATURES);
+
+
+        logger.debug("Start to inject: " + parameters.getID() + " with " + parameters.getFaultType() + " into "
+                + parameters.getClassWithPackage());
+        BodyTransformer transformer = TransformerHelper.getTransformer(parameters.getFaultType(), parameters);
         PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", transformer));
 
         try {
-            MainWrapper.main(this.buildArgs(classWithPackage, input, output));
-            if (parameter.isInjected()) {
-                logger.debug("Succeed to inject:" + parameter.getID() + " with " + singleInjection.getType() + " into "
-                        + classWithPackage);
+            MainWrapper.main(this.buildArgs(parameters.getClassWithPackage(), parameters.getInput(), parameters.getOutput()));
+            if (parameters.isInjected()) {
+                logger.debug("Succeed to inject:" + parameters.getID() + " with " + parameters.getFaultType() + " into "
+                        + parameters.getClassWithPackage());
                 return true;
             } else {
-                logger.debug("Failed to inject:" + parameter.getID() + " with " + singleInjection.getType() + " into "
-                        + classWithPackage);
+                logger.debug("Failed to inject:" + parameters.getID() + " with " + parameters.getFaultType() + " into "
+                        + parameters.getClassWithPackage());
                 return false;
             }
 
         } catch (Exception e) {
-            logger.debug("Failed to inject2:" + parameter.getID() + " with " + singleInjection.getType() + " into "
-                    + classWithPackage);
+            logger.debug("Exception during injecting:" + parameters.getID() + " with " + parameters.getFaultType() + " into "
+                    + parameters.getClassWithPackage());
             logger.error(e.getMessage());
             return false;
         } finally {
@@ -111,72 +106,70 @@ public class InjectionManager {
             G.reset();
         }
     }
-	
+
     private String[] buildArgs(String classWithPackage, String input, String output) {
-        // TODO should guarantee input is the classPath
         String[] args;
         if (this.debugMode) {
-			args = new String[11];
+            args = new String[11];
 
-			args[0] = "-cp";
-			args[1] = ".:" + input;
-			args[2] = "-pp";
-			args[3] = "-p";
-			args[4] = "jb";
-			args[5] = "use-original-names:true";
-//            args[6] = "-w";
-//            args[7] = "-f";
-//            args[8] = "jimple";
-//            args[9] = "-d";
-//            args[10] = output;
-//            args[11] = classWithPackage;
-			args[6] = "-f";
-			args[7] = "jimple";
-			args[8] = "-d";
-			args[9] = output;
-			args[10] = classWithPackage;
+            args[0] = "-cp";
+            args[1] = ".:" + input;
+            args[2] = "-pp";
+            args[3] = "-p";
+            args[4] = "jb";
+            args[5] = "use-original-names:true";
+            // args[6] = "-w";
+            // args[7] = "-f";
+            // args[8] = "jimple";
+            // args[9] = "-d";
+            // args[10] = output;
+            // args[11] = classWithPackage;
+            args[6] = "-f";
+            args[7] = "jimple";
+            args[8] = "-d";
+            args[9] = output;
+            args[10] = classWithPackage;
         } else {
-            
-			args = new String[9];
-			args[0] = "-cp";
-			String fullClassPath = getAllClassPath(input);
-			args[1] = fullClassPath;
-			// logger.error(fullClassPath);
-			args[2] = "-pp";
-			args[3] = "-p";
-			args[4] = "jb";
-			args[5] = "use-original-names:true";
-//			args[6] = "-w";
 
-//			args[7] = "-d";
-//			args[8] = output;
-//			args[9] = classWithPackage;
-			args[6] = "-d";
-			args[7] = output;
-			args[8] = classWithPackage;
+            args = new String[9];
+            args[0] = "-cp";
+            String fullClassPath = getAllClassPath(input);
+            args[1] = fullClassPath;
+            // logger.error(fullClassPath);
+            args[2] = "-pp";
+            args[3] = "-p";
+            args[4] = "jb";
+            args[5] = "use-original-names:true";
+            // args[6] = "-w";
+
+            // args[7] = "-d";
+            // args[8] = output;
+            // args[9] = classWithPackage;
+            args[6] = "-d";
+            args[7] = output;
+            args[8] = classWithPackage;
         }
 
         return args;
     }
-    
-	// to get all the classpaths for the dependency of the class file to be injected
-	private String getAllClassPath(String inputPath) {
-		String fullClassPath = ".";
-		File rootPack = new File(this.dependencyPath);
-		if ((!rootPack.exists()) || (!rootPack.isDirectory())) {
-			return fullClassPath + inputPath;
-		}
-		File[] files = rootPack.listFiles();
-		for (int i = 0; i < files.length; i++) {
-			File tmpFile = files[i];
-			if (tmpFile.isDirectory()) {
-				fullClassPath += ":" + tmpFile.getAbsolutePath();
-			}
-		}
-		return fullClassPath;
-	}
-	
-	
+
+    // to get all the classpaths for the dependency of the class file to be injected
+    private String getAllClassPath(String inputPath) {
+        String fullClassPath = ".";
+        File rootPack = new File(this.dependencyPath);
+        if ((!rootPack.exists()) || (!rootPack.isDirectory())) {
+            return fullClassPath + inputPath;
+        }
+        File[] files = rootPack.listFiles();
+        for (int i = 0; i < files.length; i++) {
+            File tmpFile = files[i];
+            if (tmpFile.isDirectory()) {
+                fullClassPath += ":" + tmpFile.getAbsolutePath();
+            }
+        }
+        return fullClassPath;
+    }
+
     private List<String> getFullClassName(String input, String subPackage, String className) {
         // List<String> allFullClassName=new ArrayList<String>();
         String rootPackage = null;
@@ -231,6 +224,5 @@ public class InjectionManager {
     private void generateReport() {
         // TODO
     }
-
 
 }

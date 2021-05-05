@@ -86,7 +86,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 	 */
 	protected List<Stmt> createActivateStatement(Body b) {
 		SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter");
-		SootClass stringClass=Scene.v().getSootClass("java.lang.String");
+		SootClass stringClass = Scene.v().getSootClass("java.lang.String");
 		Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
 		b.getLocals().add(writer);
 		// create a local variable to store the value time
@@ -99,27 +99,31 @@ public abstract class BasicTransformer extends BodyTransformer {
 		SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>");
 		SootMethod closeMethod = Scene.v().getMethod("<java.io.OutputStreamWriter: void close()>");
 		SootMethod currentTimeMethod = Scene.v().getMethod("<java.lang.System: long currentTimeMillis()>");
-		SootMethod convertLong2StringMethod=Scene.v().getMethod("<java.lang.Long: java.lang.String toString(long)>");
+		SootMethod convertLong2StringMethod = Scene.v().getMethod("<java.lang.Long: java.lang.String toString(long)>");
 
 		AssignStmt newStmt = Jimple.v().newAssignStmt(writer, Jimple.v().newNewExpr(RefType.v("java.io.FileWriter")));
 		AssignStmt newStringInitStmt = Jimple.v().newAssignStmt(mstimeS, Jimple.v().newNewExpr(RefType.v(stringClass)));
-//		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
-//				StringConstant.v(this.parameters.getOutput() + File.separator + "logs/activation.log"), IntConstant.v(1)));
+		// InvokeStmt invStmt =
+		// Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer,
+		// constructor.makeRef(),
+		// StringConstant.v(this.parameters.getOutput() + File.separator +
+		// "logs/activation.log"), IntConstant.v(1)));
 		InvokeStmt invStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(writer, constructor.makeRef(),
 				StringConstant.v(this.parameters.getActivationLogFile()), IntConstant.v(1)));
-		InvokeStmt invStringInitStmt = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(mstimeS, stringConstructor.makeRef()));
+		InvokeStmt invStringInitStmt = Jimple.v()
+				.newInvokeStmt(Jimple.v().newSpecialInvokeExpr(mstimeS, stringConstructor.makeRef()));
 
 		// generate time
 		AssignStmt timeStmt = Jimple.v().newAssignStmt(mstime,
 				Jimple.v().newStaticInvokeExpr(currentTimeMethod.makeRef()));
-		
+
 		// convert long time to string time
 		AssignStmt long2String = Jimple.v().newAssignStmt(mstimeS,
-				Jimple.v().newStaticInvokeExpr(convertLong2StringMethod.makeRef(),mstime));
+				Jimple.v().newStaticInvokeExpr(convertLong2StringMethod.makeRef(), mstime));
 		// print time
 		InvokeStmt logTimeStmt = Jimple.v()
 				.newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(), mstimeS));
-		//print injection ID
+		// print injection ID
 		InvokeStmt logStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, printMethod.makeRef(),
 				StringConstant.v(":" + this.parameters.getID() + "\n")));
 		InvokeStmt closeStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(writer, closeMethod.makeRef()));
@@ -134,7 +138,20 @@ public abstract class BasicTransformer extends BodyTransformer {
 		statements.add(logTimeStmt);
 		statements.add(logStmt);
 		statements.add(closeStmt);
-		if (!this.parameters.getActivationMode().equals("always")) {
+
+		if (this.parameters.getActivationMode().equals("CUSTOMIZED")) {
+			// call user-defined method
+
+			SootClass activationHelperClass = Scene.v().getSootClass("com.alex.ssfi.util.ActivationHelper");
+			SootMethod activationMarker = activationHelperClass.getMethodByNameUnsafe("activate");
+			// tmpActivated
+			// convert long time to string time
+			InvokeStmt markActivationStmt=Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(activationMarker.makeRef(),StringConstant.v(this.parameters.getID())));
+			statements.add(markActivationStmt);
+			return statements;
+
+		}
+		if (!this.parameters.getActivationMode().equals("ALWAYS")) {
 			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
 			AssignStmt injectedStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(activated.makeRef()),
 					IntConstant.v(1));
@@ -163,20 +180,25 @@ public abstract class BasicTransformer extends BodyTransformer {
 		AssignStmt assignStmt = Jimple.v().newAssignStmt(Jimple.v().newStaticFieldRef(exeCounter.makeRef()), tmp);
 
 		// for debug
-//		Local tmpRef = Jimple.v().newLocal("tmpRef", RefType.v("java.io.PrintStream"));
-//		b.getLocals().add(tmpRef);
-//		Stmt debugCopy = Jimple.v().newAssignStmt(tmpRef, Jimple.v()
-//				.newStaticFieldRef(Scene.v().getField("<java.lang.System: java.io.PrintStream out>").makeRef()));
-//		SootMethod toCall = Scene.v().getMethod("<java.io.PrintStream: void println(long)>");
-//		Stmt printStmt = Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(tmpRef, toCall.makeRef(), tmp));
+		// Local tmpRef = Jimple.v().newLocal("tmpRef",
+		// RefType.v("java.io.PrintStream"));
+		// b.getLocals().add(tmpRef);
+		// Stmt debugCopy = Jimple.v().newAssignStmt(tmpRef, Jimple.v()
+		// .newStaticFieldRef(Scene.v().getField("<java.lang.System: java.io.PrintStream
+		// out>").makeRef()));
+		// SootMethod toCall = Scene.v().getMethod("<java.io.PrintStream: void
+		// println(long)>");
+		// Stmt printStmt =
+		// Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(tmpRef,
+		// toCall.makeRef(), tmp));
 
 		preCheckStmts.add(copyStmt);
-//		preCheckStmts.add(debugCopy);
-//		preCheckStmts.add(printStmt);
+		// preCheckStmts.add(debugCopy);
+		// preCheckStmts.add(printStmt);
 		preCheckStmts.add(addStmt);
 		preCheckStmts.add(assignStmt);
 
-		if (activationMode.equals("always")) {
+		if (activationMode.equals("ALWAYS")) {
 			// only add counter
 			// done by above
 			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
@@ -185,7 +207,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 				b.getMethod().getDeclaringClass().addField(activated);
 			}
 
-		} else if (activationMode.equals("first")) {
+		} else if (activationMode.equals("FIRST")) {
 			// add flag
 			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
 			if (activated == null) {
@@ -193,7 +215,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 				b.getMethod().getDeclaringClass().addField(activated);
 			}
 
-		} else if (activationMode.equals("random")) {
+		} else if (activationMode.equals("RANDOM")) {
 			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
 			if (activated == null) {
 				activated = new SootField("sootActivated", BooleanType.v(), Modifier.STATIC);
@@ -203,6 +225,19 @@ public abstract class BasicTransformer extends BodyTransformer {
 				this.injectInfo.put("ExeIndex", "" + targetCounter);
 				exeCounter.addTag(new RandomTag(targetCounter));
 			}
+
+		} else if (activationMode.equals("FIXED")) {
+			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
+			if (activated == null) {
+				activated = new SootField("sootActivated", BooleanType.v(), Modifier.STATIC);
+				b.getMethod().getDeclaringClass().addField(activated);
+				int targetCounter = parameters.getActivationIndex();
+				this.injectInfo.put("ActivationIndex", "" + targetCounter);
+				exeCounter.addTag(new RandomTag(targetCounter));
+			}
+		} else if (activationMode.equals("CUSTOMIZED")) {
+			// in this activation mode, the whole logic is controlled by user-defined code
+			// SSFI doesn't do anything
 
 		}
 
@@ -216,7 +251,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 		Local tmpActivated = Jimple.v().newLocal("sootActivated", BooleanType.v());
 		b.getLocals().add(tmpActivated);
 
-		if (activationMode.equals("always")) {
+		if (activationMode.equals("ALWAYS")) {
 			// if false, go to the default target
 			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
 			AssignStmt copyStmt = Jimple.v().newAssignStmt(tmpActivated,
@@ -226,7 +261,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 			conditionStmts.add(copyStmt);
 			conditionStmts.add(ifStmt);
 
-		} else if (activationMode.equals("first")) {
+		} else if (activationMode.equals("FIRST")) {
 			// add flag
 			Local tmpCounterRef = Jimple.v().newLocal("sootCounterRef", LongType.v());
 			b.getLocals().add(tmpCounterRef);
@@ -245,7 +280,7 @@ public abstract class BasicTransformer extends BodyTransformer {
 			conditionStmts.add(ifStmt1);
 			conditionStmts.add(ifStmt2);
 
-		} else if (activationMode.equals("random")) {
+		} else if (activationMode.equals("RANDOM") || activationMode.equals("FIXED")) {
 			Local tmpCounterRef = Jimple.v().newLocal("sootCounterRef", LongType.v());
 			b.getLocals().add(tmpCounterRef);
 			SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());
@@ -267,8 +302,17 @@ public abstract class BasicTransformer extends BodyTransformer {
 			conditionStmts.add(ifStmt1);
 			conditionStmts.add(ifStmt2);
 
+		} else if (activationMode.equals("CUSTOMIZED")) {
+			// user-defined activation checking logic, SSFI just calls that user-defined
+			// method
+			SootClass activationHelperClass = Scene.v().getSootClass("com.alex.ssfi.util.ActivationHelper");
+			SootMethod activationChecker = activationHelperClass.getMethodByNameUnsafe("hasActivated");
+			AssignStmt checkActivationResult = Jimple.v().newAssignStmt(tmpActivated, Jimple.v()
+					.newStaticInvokeExpr(activationChecker.makeRef(), StringConstant.v(this.parameters.getID())));
+			IfStmt ifStmt1 = Jimple.v().newIfStmt(Jimple.v().newEqExpr(tmpActivated, IntConstant.v(1)), failTarget);
+			conditionStmts.add(checkActivationResult);
+			conditionStmts.add(ifStmt1);
 		}
 		return conditionStmts;
 	}
-
 }

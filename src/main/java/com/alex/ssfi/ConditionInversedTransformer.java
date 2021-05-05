@@ -28,7 +28,7 @@ import soot.jimple.Stmt;
 import soot.util.Chain;
 
 public class ConditionInversedTransformer extends BasicTransformer {
-	private final Logger logger = LogManager.getLogger(ValueTransformer.class);
+	private final Logger logger = LogManager.getLogger(ConditionInversedTransformer.class);
 
 	public ConditionInversedTransformer(RunningParameter parameters) {
 		this.parameters = parameters;

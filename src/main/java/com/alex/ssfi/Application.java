@@ -28,8 +28,12 @@ public class Application {
         		logger.fatal("Invalid Configuration!");
         		return;
         	}
-        	InjectionManager.getManager().peformInjection(config);
-        	logger.info("Injection Succeed!");
+        	if (InjectionManager.getManager().peformInjection(config)){
+				logger.info("Injection Succeed!");
+			}else{
+				logger.error("Injection Failed!");
+			}
+        	
         }catch (Exception e){
         	logger.info("Injection Failed!");
         	logger.fatal(e.getMessage());

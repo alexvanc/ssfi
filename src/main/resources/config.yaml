@@ -4,8 +4,9 @@
   dependencyPath: /home/alex/work/dependency #it should be a folder of unpacked jars
   activationLogFile: /tmp/activation.log # record whether an injected fault was ever activated
   debug: false
-  activationMode: always # always/random
-  activationRate: 5  # the probability(1/n) of fault activation, only activated once, used in random mode
+  activationMode: ALWAYS # ALWAYS/RANDOM/FIXED/CUSTOMIZED
+  activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is ALWAYS
+  activationIndex: 3 #only used when the activationMode is FIXED
   
   
   #if not specified, each configuration item will be randomly assigned a value

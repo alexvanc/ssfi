@@ -1,10 +1,5 @@
 package com.alex.ssfi.util;
 
-import java.util.List;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 public class Configuration {
 	private String inputPath;
 	private String outputPath;
@@ -13,11 +8,20 @@ public class Configuration {
 	private String component;
 	private String jarName;
 	private boolean debug;
-	private String activationMode = "always";
+	private String activationMode = "ALWAYS";
 	private int activationRate = 10;
-	private SingleRun singleRun;
+	private int activationIndex = 1;
+	private String type;
+	private LocationPattern locationPattern;
+	private String variableType;
+	private String variableScope;
+	private String action;
+	private String targetValue;
+	private String exceptionType;
+	private float distribution;
 
-	private static final Logger logger = LogManager.getLogger(Configuration.class);
+	// private static final Logger logger =
+	// LogManager.getLogger(Configuration.class);
 
 	public Configuration() {
 	};
@@ -26,10 +30,80 @@ public class Configuration {
 
 	}
 
-	public boolean validateConfig() {
-		return this.singleRun.validate();
+	public int getActivationIndex() {
+		return activationIndex;
 	}
 
+	public void setActivationIndex(int activationIndex) {
+		this.activationIndex = activationIndex;
+	}
+
+	public String getType() {
+		return type;
+
+	}
+
+	public void setType(String type) {
+		this.type = type;
+	}
+
+	public LocationPattern getLocationPattern() {
+		return locationPattern;
+	}
+
+	public void setLocationPattern(LocationPattern locationPattern) {
+		this.locationPattern = locationPattern;
+	}
+
+	public String getVariableType() {
+		return variableType;
+	}
+
+	public void setVariableType(String variableType) {
+		this.variableType = variableType;
+	}
+
+	public String getVariableScope() {
+		return variableScope;
+	}
+
+	public void setVariableScope(String variableScope) {
+		this.variableScope = variableScope;
+	}
+
+	public String getAction() {
+		return action;
+	}
+
+	public void setAction(String action) {
+		this.action = action;
+	}
+
+	public String getTargetValue() {
+		return targetValue;
+	}
+
+	public String getExceptionType() {
+		return exceptionType;
+	}
+
+	public void setExceptionType(String exceptionType) {
+		this.exceptionType = exceptionType;
+	}
+
+	public float getDistribution() {
+		return distribution;
+	}
+
+	public void setDistribution(float distribution) {
+		this.distribution = distribution;
+	}
+
+	public boolean validateConfig() {
+		// to-do
+		// The normativeness of the configration file should be checked
+		return true;
+	}
 
 	public String getInputPath() {
 		return inputPath;
@@ -47,21 +121,12 @@ public class Configuration {
 		this.outputPath = outputPath;
 	}
 
-	public SingleRun getSingleRun() {
-		return singleRun;
-	}
-
-	public void setSingleRun(SingleRun singleRun) {
-		this.singleRun = singleRun;
-	}
-
-
-	public boolean isDebug() {
-		return debug;
-	}
-
 	public void setDebug(boolean debug) {
 		this.debug = debug;
+	}
+
+	public boolean isDebug() {
+		return this.debug;
 	}
 
 	public String getActivationMode() {
@@ -96,16 +161,16 @@ public class Configuration {
 		this.jarName = jarName;
 	}
 
-    public String getDependencyPath() {
-        return dependencyPath;
-    }
+	public String getDependencyPath() {
+		return dependencyPath;
+	}
 
-    public void setDependencyPath(String dependencyPath) {
-        this.dependencyPath = dependencyPath;
-    }
+	public void setDependencyPath(String dependencyPath) {
+		this.dependencyPath = dependencyPath;
+	}
 
 	public String getActivationLogFile() {
-		if (this.activationLogFile==null) {
+		if (this.activationLogFile == null) {
 			return "/tmp/injection.log";
 		}
 		return activationLogFile;
@@ -115,5 +180,60 @@ public class Configuration {
 		this.activationLogFile = activationLogFile;
 	}
 
+	public String getPackagePattern(){
+		return this.locationPattern.getPackageP();
+	}
+
+	public String getClassPattern(){
+		return this.locationPattern.getClassP();
+	}
+
+	public String getMethodPattern(){
+		return this.locationPattern.getMethodP();
+	}
+
+	public String getVariablePattern(){
+		return this.locationPattern.getVariableP();
+	}
+
 }
 
+class LocationPattern {
+	private String packageP;
+	private String classP;
+	private String methodP;
+	private String variableP;
+
+	public String getPackageP() {
+		return packageP;
+	}
+
+	public void setPackageP(String packageP) {
+		this.packageP = packageP;
+	}
+
+	public String getClassP() {
+		return classP;
+	}
+
+	public void setClassP(String classP) {
+		this.classP = classP;
+	}
+
+	public String getMethodP() {
+		return methodP;
+	}
+
+	public void setMethodP(String methodP) {
+		this.methodP = methodP;
+	}
+
+	public String getVariableP() {
+		return variableP;
+	}
+
+	public void setVariableP(String variableP) {
+		this.variableP = variableP;
+	}
+
+}

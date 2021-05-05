@@ -1,16 +1,20 @@
 package com.alex.ssfi.util;
 
 public class RunningParameter {
-//	public RuningParameter() {
-//		
-//	}
+	// public RuningParameter() {
+	//
+	// }
 	private String ID;
+	private String input;
 	private String output;
+	private String faultType;
+	private String classWithPackage;
 	private String activationMode;
 	private String activationLogFile;
 	private String componentName;
 	private String jarName;
 	private int activationRate;
+	private int activationIndex;
 	private String variableScope;
 	private String variableType;
 	private String variableName;
@@ -33,22 +37,25 @@ public class RunningParameter {
 		this.variableName = singleRun.getVariablePattern();
 		this.variableValue = singleRun.getTargetValue();
 		this.action = singleRun.getAction();
-//		int faultTypeID=FaultTypeHelper.getValueTypeIDByName(singleRun.getType());
+		// int faultTypeID=FaultTypeHelper.getValueTypeIDByName(singleRun.getType());
 	}
 
-	public RunningParameter(SingleRun singleRun, String output, String activationMode, int activationRate,String activationLogFile) {
+	public RunningParameter(Configuration config, String classWithPackage) {
 		this.ID = IDHelper.generateID(20);
-		this.output = output;
-		this.activationMode = activationMode;
-		this.activationRate = activationRate;
-		this.activationLogFile=activationLogFile;
-		this.methodName = singleRun.getMethodPattern();
-		this.variableScope = singleRun.getVariableScope();
-		this.variableType = singleRun.getVariableType();
-		this.variableName = singleRun.getVariablePattern();
-		this.variableValue = singleRun.getTargetValue();
-		this.action = singleRun.getAction();
-//		int faultTypeID=FaultTypeHelper.getValueTypeIDByName(singleRun.getType());
+		this.faultType = config.getType();
+		this.input = config.getInputPath();
+		this.output = config.getOutputPath();
+		this.activationMode = config.getActivationMode();
+		this.activationRate = config.getActivationRate();
+		this.activationIndex = config.getActivationIndex();
+		this.methodName = config.getMethodPattern();
+		this.variableScope = config.getVariableScope();
+		this.variableType = config.getVariableType();
+		this.variableName = config.getVariablePattern();
+		this.variableValue = config.getTargetValue();
+		this.action = config.getAction();
+		this.activationLogFile = config.getActivationLogFile();
+		this.classWithPackage = classWithPackage;
 	}
 
 	public String getID() {
@@ -87,10 +94,6 @@ public class RunningParameter {
 		this.injected = injected;
 	}
 
-	public String getMethodName() {
-		return methodName;
-	}
-
 	public String getVariableValue() {
 		return variableValue;
 	}
@@ -111,8 +114,12 @@ public class RunningParameter {
 		return jarName;
 	}
 
+	public int getActivationIndex() {
+		return activationIndex;
+	}
+
 	public String getActivationLogFile() {
-		if (this.activationLogFile==null) {
+		if (this.activationLogFile == null) {
 			return "/tmp/activation.log";
 		}
 		return activationLogFile;
@@ -121,5 +128,21 @@ public class RunningParameter {
 	public void setActivationLogFile(String activationLogFile) {
 		this.activationLogFile = activationLogFile;
 	}
+
+	public String getFaultType() {
+		return faultType;
+	}
+
+	public String getClassWithPackage() {
+		return classWithPackage;
+	}
+
+	public String getInput() {
+		return input;
+	}
+
+	public String getMethodName() {
+		return methodName;
+	}	
 
 }
