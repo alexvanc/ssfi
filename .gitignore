@@ -1,7 +1,27 @@
-/target/
-.classpath
 .settings/
 .git/
-.project
-.DS_Store
 .factorypath
+
+*.patch
+.checkstyle
+
+# Mac files:
+.DS_Store
+
+# Build files:
+*.class
+target
+UnknownJob*
+failed-profile.txt
+
+# IntelliJ IDEA files:
+*.iml
+*.ipr
+*.iws
+*.idea
+
+# Eclipse files:
+.classpath
+.eclipse
+.project
+.settings
