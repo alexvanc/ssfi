@@ -1,6 +1,6 @@
 # ssfi
-A Soot-based Software Fault Injection Tool
 
+A Soot-based Software Fault Injection Tool
 
 build: mvn clean && mvn compile && mvn package
 

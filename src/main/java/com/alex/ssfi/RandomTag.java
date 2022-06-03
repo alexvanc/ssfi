@@ -8,34 +8,34 @@ import soot.tagkit.AttributeValueException;
 import soot.tagkit.Tag;
 
 public class RandomTag implements Tag {
-	private long targetCounter;
-	
-	public RandomTag(int targetCounter) {
-		this.targetCounter=targetCounter;
-	}
+    private final long targetCounter;
 
-	public String getName() {
-		// TODO Auto-generated method stub
-		return "sootTargetCounter";
-	}
+    public RandomTag(int targetCounter) {
+        this.targetCounter = targetCounter;
+    }
 
-	public byte[] getValue() throws AttributeValueException {
-		// TODO Auto-generated method stub
-		ByteArrayOutputStream baos = new ByteArrayOutputStream(4);
+    public String getName() {
+        // TODO Auto-generated method stub
+        return "sootTargetCounter";
+    }
+
+    public byte[] getValue() throws AttributeValueException {
+        // TODO Auto-generated method stub
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(4);
         DataOutputStream dos = new DataOutputStream(baos);
         try {
             dos.writeLong(targetCounter);
             dos.flush();
-        } catch(IOException e) {
+        } catch (IOException e) {
             System.err.println(e);
             throw new RuntimeException(e);
         }
         return baos.toByteArray();
-	}
+    }
 
-	public long getTargetCounter() {
-		return targetCounter;
-	}
+    public long getTargetCounter() {
+        return targetCounter;
+    }
 
 
 }

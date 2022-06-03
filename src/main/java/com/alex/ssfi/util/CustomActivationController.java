@@ -8,9 +8,9 @@ public class CustomActivationController {
         return true;
     }
 
-    public static boolean activate(String faultID){
+    public static boolean activate(String faultID) {
 //        users record activation info
         return true;
     }
-    
+
 }

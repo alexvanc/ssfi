@@ -24,7 +24,7 @@ public class InjectionManager {
     private static final Logger logger = LogManager.getLogger(InjectionManager.class);
     // private static final Logger recorder=LogManager.getLogger("inject_recorder");
 
-    private static InjectionManager instance = new InjectionManager();
+    private static final InjectionManager instance = new InjectionManager();
     private boolean debugMode = false;
     private String dependencyPath;
 

@@ -1,45 +1,44 @@
 #Configuration:
-  injectionMode: single
-  inputPath: /home/alex/work/hadoop-input
-  outputPath: /home/alex/work/hadoop-output
-  debug: false
-  activationMode: always 
-  activationRate: 5
-  timeout: 15000
-  component: common
-  
-  singleRun:
-    type: VALUE_FAULT
-    locationPattern:
-      packageP: 
-      classP: 
-      methodP: 
-      variableP: 
-    variableScope: 
-    variableType: 
-    action: 
-    targetValue: 
-    
-  batchRun:
-    counter: 5
-    distributionMode: fix
-    faultList:
-    -
-       type: VALUE_FAULT
-       distribution: 1
-       locationPattern:
-         packageP: com.oath
-         classP: 
-         methodP: 
-       variableType: 
-       action: 
- #   -
- #      type: ExceptionShortCircuit
- #      distribution: 0.5
- #      locationPattern:
- #        packageP: 
- #        classP: 
- #        methodP: \*try\*
- #      exceptionType: THROW
- #      action: FIRST 
+injectionMode: single
+inputPath: /home/alex/work/hadoop-input
+outputPath: /home/alex/work/hadoop-output
+debug: false
+activationMode: always
+activationRate: 5
+timeout: 15000
+component: common
+
+singleRun:
+  type: VALUE_FAULT
+  locationPattern:
+    packageP:
+    classP:
+    methodP:
+    variableP:
+  variableScope:
+  variableType:
+  action:
+  targetValue:
+
+batchRun:
+  counter: 5
+  distributionMode: fix
+  faultList:
+    - type: VALUE_FAULT
+      distribution: 1
+      locationPattern:
+        packageP: com.oath
+        classP:
+        methodP:
+      variableType:
+      action:
+  #   -
+  #      type: ExceptionShortCircuit
+  #      distribution: 0.5
+  #      locationPattern:
+  #        packageP:
+  #        classP:
+  #        methodP: \*try\*
+  #      exceptionType: THROW
+  #      action: FIRST
  

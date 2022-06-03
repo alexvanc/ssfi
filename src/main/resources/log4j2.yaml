@@ -21,17 +21,15 @@ Configuration:
         ThresholdFilter:
           level: debug
 
- 
+
   Loggers:
     logger:
-      -
-        name: com.alex.ssfi
+      - name: com.alex.ssfi
         level: debug
         additivity: false
         AppenderRef:
           ref: STDOUT
-      - 
-        name: inject_recorder
+      - name: inject_recorder
         level: info
         additivity: false
         AppenderRef:
