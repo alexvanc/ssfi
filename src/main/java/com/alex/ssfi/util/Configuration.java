@@ -109,8 +109,8 @@ public class Configuration {
     }
 
     public boolean validateConfig() {
-        // to-do
-        // The normativeness of the configration file should be checked
+        // TODO
+        // The normalization of the configuration file should be checked
         return true;
     }
 

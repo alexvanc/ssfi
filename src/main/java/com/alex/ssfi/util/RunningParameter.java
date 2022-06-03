@@ -8,7 +8,6 @@ public class RunningParameter {
     private String input;
     private final String output;
     private String faultType;
-    private String classWithPackage;
     private final String activationMode;
     private String activationLogFile;
     private String componentName;
@@ -41,7 +40,7 @@ public class RunningParameter {
         // int faultTypeID=FaultTypeHelper.getValueTypeIDByName(singleRun.getType());
     }
 
-    public RunningParameter(Configuration config, String classWithPackage) {
+    public RunningParameter(Configuration config) {
         this.ID = IDHelper.generateID(20);
         this.faultType = config.getType();
         this.input = config.getInputPath();
@@ -56,7 +55,6 @@ public class RunningParameter {
         this.variableValue = config.getTargetValue();
         this.action = config.getAction();
         this.activationLogFile = config.getActivationLogFile();
-        this.classWithPackage = classWithPackage;
         this.customizedActivation = config.getCustomizedActivation();
     }
 
@@ -137,10 +135,6 @@ public class RunningParameter {
 
     public String getFaultType() {
         return faultType;
-    }
-
-    public String getClassWithPackage() {
-        return classWithPackage;
     }
 
     public String getInput() {

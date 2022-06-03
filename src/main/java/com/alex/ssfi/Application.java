@@ -19,15 +19,18 @@ public class Application {
             logger.fatal("Configuration file missing");
             return;
         }
+
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-        Configuration config = null;
+        Configuration config;
         try {
+//            Parse configuration parameters from yaml file
             config = mapper.readValue(new File(args[0]), Configuration.class);
             if (!config.validateConfig()) {
                 logger.fatal("Invalid Configuration!");
                 return;
             }
-            if (InjectionManager.getManager().peformInjection(config)) {
+//            Start fault injection
+            if (InjectionManager.getManager(config).startInjection()) {
                 logger.info("Injection Succeed!");
             } else {
                 logger.error("Injection Failed!");
@@ -38,6 +41,5 @@ public class Application {
             logger.fatal(e.getMessage());
             System.exit(0);
         }
-
     }
 }
