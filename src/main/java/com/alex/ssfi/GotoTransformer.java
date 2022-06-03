@@ -41,19 +41,19 @@ import soot.jimple.toolkits.typing.fast.BottomType;
 import soot.util.*;
 
 public class GotoTransformer extends BodyTransformer {
-	private static GotoTransformer instance = new GotoTransformer();
-	private boolean addedCounter=false;
+    private static final GotoTransformer instance = new GotoTransformer();
+    private final boolean addedCounter = false;
 
-	private GotoTransformer() {
-	}
+    private GotoTransformer() {
+    }
 
-	public static GotoTransformer v() {
-		return instance;
-	}
+    public static GotoTransformer v() {
+        return instance;
+    }
 
-	@Override
-	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
-		// TODO Auto-generated method stub
+    @Override
+    protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
+        // TODO Auto-generated method stub
 //		if (!Scene.v().getMainClass().
 //		          declaresMethod("void main(java.lang.String[])"))
 //		    throw new RuntimeException("couldn't find main() in mainClass");
@@ -64,8 +64,8 @@ public class GotoTransformer extends BodyTransformer {
 ////	
 //		Chain<SootField> allFields=b.getMethod().getDeclaringClass().getFields();
 //		System.out.println(allFields.size());
-		
-		//Scene.v().loadNecessaryClasses();
+
+        //Scene.v().loadNecessaryClasses();
 //		Scene.v().loadClassAndSupport("java.io.FileWriter");
 //		SootClass fWriterClass=Scene.v().getSootClass("java.io.FileWriter");
 //		Local writer=Jimple.v().newLocal("actWriter", RefType.v(fWriterClass));
@@ -89,18 +89,18 @@ public class GotoTransformer extends BodyTransformer {
 ////				System.out.println(options.toString());
 //			}
 //		}
-		
-		String methodSignature=b.getMethod().getSignature();
-		if (!methodSignature.contains("tryAndCatch")){
-			return;
-		}
-		Iterator<Trap> trapItr=b.getTraps().snapshotIterator();
-		while(trapItr.hasNext()){
-			Trap tmp=trapItr.next();
-			System.out.println(tmp.getBeginUnit().toString());
-			System.out.println(tmp.getEndUnit().toString());
-			System.out.println(tmp.getHandlerUnit().toString());
-		}
+
+        String methodSignature = b.getMethod().getSignature();
+        if (!methodSignature.contains("tryAndCatch")) {
+            return;
+        }
+        Iterator<Trap> trapItr = b.getTraps().snapshotIterator();
+        while (trapItr.hasNext()) {
+            Trap tmp = trapItr.next();
+            System.out.println(tmp.getBeginUnit().toString());
+            System.out.println(tmp.getEndUnit().toString());
+            System.out.println(tmp.getHandlerUnit().toString());
+        }
 //		
 //		SootField gotoCounter;
 //		try {
@@ -127,9 +127,8 @@ public class GotoTransformer extends BodyTransformer {
 //			
 //
 //		}
-		
-				
-		
+
+
 //		List<SootMethod> methods=b.getMethod().getDeclaringClass().getMethods();
 //		for(int i=0;i<methods.size();i++) {
 //			Body body=methods.get(i).getActiveBody();
@@ -158,7 +157,7 @@ public class GotoTransformer extends BodyTransformer {
 //				
 //			}
 //		}
-			
+
 //		Chain<Unit> units=b.getUnits();
 //		Iterator<Unit> stmIt=units.snapshotIterator();
 //		while(stmIt.hasNext()) {
@@ -220,6 +219,6 @@ public class GotoTransformer extends BodyTransformer {
 //			
 //		}
 
-	}
+    }
 
 }

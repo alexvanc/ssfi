@@ -1,239 +1,248 @@
 package com.alex.ssfi.util;
 
 public class Configuration {
-	private String inputPath;
-	private String outputPath;
-	private String dependencyPath;
-	private String activationLogFile;
-	private String component;
-	private String jarName;
-	private boolean debug;
-	private String activationMode = "ALWAYS";
-	private int activationRate = 10;
-	private int activationIndex = 1;
-	private String type;
-	private LocationPattern locationPattern;
-	private String variableType;
-	private String variableScope;
-	private String action;
-	private String targetValue;
-	private String exceptionType;
-	private float distribution;
+    private String inputPath;
+    private String outputPath;
+    private String dependencyPath;
+    private String activationLogFile;
+    private String component;
+    private String jarName;
+    private boolean debug;
+    private String activationMode = "ALWAYS";
+    private int activationRate = 10;
+    private int activationIndex = 1;
+    private String type;
+    private LocationPattern locationPattern;
+    private String variableType;
+    private String variableScope;
+    private String action;
+    private String targetValue;
+    private String exceptionType;
+    private float distribution;
+    private String customizedActivation;
 
-	// private static final Logger logger =
-	// LogManager.getLogger(Configuration.class);
+    // private static final Logger logger =
+    // LogManager.getLogger(Configuration.class);
 
-	public Configuration() {
-	};
+    public Configuration() {
+    }
 
-	public Configuration(String configFile) {
+    public Configuration(String configFile) {
 
-	}
+    }
 
-	public int getActivationIndex() {
-		return activationIndex;
-	}
+    public String getCustomizedActivation() {
+        return customizedActivation;
+    }
 
-	public void setActivationIndex(int activationIndex) {
-		this.activationIndex = activationIndex;
-	}
+    public void setCustomizedActivation(String customizedActivation) {
+        this.customizedActivation = customizedActivation;
+    }
 
-	public String getType() {
-		return type;
+    public int getActivationIndex() {
+        return activationIndex;
+    }
 
-	}
+    public void setActivationIndex(int activationIndex) {
+        this.activationIndex = activationIndex;
+    }
 
-	public void setType(String type) {
-		this.type = type;
-	}
+    public String getType() {
+        return type;
 
-	public LocationPattern getLocationPattern() {
-		return locationPattern;
-	}
+    }
 
-	public void setLocationPattern(LocationPattern locationPattern) {
-		this.locationPattern = locationPattern;
-	}
+    public void setType(String type) {
+        this.type = type;
+    }
 
-	public String getVariableType() {
-		return variableType;
-	}
+    public LocationPattern getLocationPattern() {
+        return locationPattern;
+    }
 
-	public void setVariableType(String variableType) {
-		this.variableType = variableType;
-	}
+    public void setLocationPattern(LocationPattern locationPattern) {
+        this.locationPattern = locationPattern;
+    }
 
-	public String getVariableScope() {
-		return variableScope;
-	}
+    public String getVariableType() {
+        return variableType;
+    }
 
-	public void setVariableScope(String variableScope) {
-		this.variableScope = variableScope;
-	}
+    public void setVariableType(String variableType) {
+        this.variableType = variableType;
+    }
 
-	public String getAction() {
-		return action;
-	}
+    public String getVariableScope() {
+        return variableScope;
+    }
 
-	public void setAction(String action) {
-		this.action = action;
-	}
+    public void setVariableScope(String variableScope) {
+        this.variableScope = variableScope;
+    }
 
-	public String getTargetValue() {
-		return targetValue;
-	}
+    public String getAction() {
+        return action;
+    }
 
-	public String getExceptionType() {
-		return exceptionType;
-	}
+    public void setAction(String action) {
+        this.action = action;
+    }
 
-	public void setExceptionType(String exceptionType) {
-		this.exceptionType = exceptionType;
-	}
+    public String getTargetValue() {
+        return targetValue;
+    }
 
-	public float getDistribution() {
-		return distribution;
-	}
+    public String getExceptionType() {
+        return exceptionType;
+    }
 
-	public void setDistribution(float distribution) {
-		this.distribution = distribution;
-	}
+    public void setExceptionType(String exceptionType) {
+        this.exceptionType = exceptionType;
+    }
 
-	public boolean validateConfig() {
-		// to-do
-		// The normativeness of the configration file should be checked
-		return true;
-	}
+    public float getDistribution() {
+        return distribution;
+    }
 
-	public String getInputPath() {
-		return inputPath;
-	}
+    public void setDistribution(float distribution) {
+        this.distribution = distribution;
+    }
 
-	public void setInputPath(String inputPath) {
-		this.inputPath = inputPath;
-	}
+    public boolean validateConfig() {
+        // TODO
+        // The normalization of the configuration file should be checked
+        return true;
+    }
 
-	public String getOutputPath() {
-		return outputPath;
-	}
+    public String getInputPath() {
+        return inputPath;
+    }
 
-	public void setOutputPath(String outputPath) {
-		this.outputPath = outputPath;
-	}
+    public void setInputPath(String inputPath) {
+        this.inputPath = inputPath;
+    }
 
-	public void setDebug(boolean debug) {
-		this.debug = debug;
-	}
+    public String getOutputPath() {
+        return outputPath;
+    }
 
-	public boolean isDebug() {
-		return this.debug;
-	}
+    public void setOutputPath(String outputPath) {
+        this.outputPath = outputPath;
+    }
 
-	public String getActivationMode() {
-		return activationMode;
-	}
+    public void setDebug(boolean debug) {
+        this.debug = debug;
+    }
 
-	public void setActivationMode(String activationMode) {
-		this.activationMode = activationMode;
-	}
+    public boolean isDebug() {
+        return this.debug;
+    }
 
-	public int getActivationRate() {
-		return activationRate;
-	}
+    public String getActivationMode() {
+        return activationMode;
+    }
 
-	public void setActivationRate(int activationRate) {
-		this.activationRate = activationRate;
-	}
+    public void setActivationMode(String activationMode) {
+        this.activationMode = activationMode;
+    }
 
-	public String getComponent() {
-		return component;
-	}
+    public int getActivationRate() {
+        return activationRate;
+    }
 
-	public void setComponent(String component) {
-		this.component = component;
-	}
+    public void setActivationRate(int activationRate) {
+        this.activationRate = activationRate;
+    }
 
-	public String getJarName() {
-		return jarName;
-	}
+    public String getComponent() {
+        return component;
+    }
 
-	public void setJarName(String jarName) {
-		this.jarName = jarName;
-	}
+    public void setComponent(String component) {
+        this.component = component;
+    }
 
-	public String getDependencyPath() {
-		return dependencyPath;
-	}
+    public String getJarName() {
+        return jarName;
+    }
 
-	public void setDependencyPath(String dependencyPath) {
-		this.dependencyPath = dependencyPath;
-	}
+    public void setJarName(String jarName) {
+        this.jarName = jarName;
+    }
 
-	public String getActivationLogFile() {
-		if (this.activationLogFile == null) {
-			return "/tmp/injection.log";
-		}
-		return activationLogFile;
-	}
+    public String getDependencyPath() {
+        return dependencyPath;
+    }
 
-	public void setActivationLogFile(String activationLogFile) {
-		this.activationLogFile = activationLogFile;
-	}
+    public void setDependencyPath(String dependencyPath) {
+        this.dependencyPath = dependencyPath;
+    }
 
-	public String getPackagePattern(){
-		return this.locationPattern.getPackageP();
-	}
+    public String getActivationLogFile() {
+        if (this.activationLogFile == null) {
+            return "/tmp/injection.log";
+        }
+        return activationLogFile;
+    }
 
-	public String getClassPattern(){
-		return this.locationPattern.getClassP();
-	}
+    public void setActivationLogFile(String activationLogFile) {
+        this.activationLogFile = activationLogFile;
+    }
 
-	public String getMethodPattern(){
-		return this.locationPattern.getMethodP();
-	}
+    public String getPackagePattern() {
+        return this.locationPattern.getPackageP();
+    }
 
-	public String getVariablePattern(){
-		return this.locationPattern.getVariableP();
-	}
+    public String getClassPattern() {
+        return this.locationPattern.getClassP();
+    }
+
+    public String getMethodPattern() {
+        return this.locationPattern.getMethodP();
+    }
+
+    public String getVariablePattern() {
+        return this.locationPattern.getVariableP();
+    }
 
 }
 
 class LocationPattern {
-	private String packageP;
-	private String classP;
-	private String methodP;
-	private String variableP;
+    private String packageP;
+    private String classP;
+    private String methodP;
+    private String variableP;
 
-	public String getPackageP() {
-		return packageP;
-	}
+    public String getPackageP() {
+        return packageP;
+    }
 
-	public void setPackageP(String packageP) {
-		this.packageP = packageP;
-	}
+    public void setPackageP(String packageP) {
+        this.packageP = packageP;
+    }
 
-	public String getClassP() {
-		return classP;
-	}
+    public String getClassP() {
+        return classP;
+    }
 
-	public void setClassP(String classP) {
-		this.classP = classP;
-	}
+    public void setClassP(String classP) {
+        this.classP = classP;
+    }
 
-	public String getMethodP() {
-		return methodP;
-	}
+    public String getMethodP() {
+        return methodP;
+    }
 
-	public void setMethodP(String methodP) {
-		this.methodP = methodP;
-	}
+    public void setMethodP(String methodP) {
+        this.methodP = methodP;
+    }
 
-	public String getVariableP() {
-		return variableP;
-	}
+    public String getVariableP() {
+        return variableP;
+    }
 
-	public void setVariableP(String variableP) {
-		this.variableP = variableP;
-	}
+    public void setVariableP(String variableP) {
+        this.variableP = variableP;
+    }
 
 }

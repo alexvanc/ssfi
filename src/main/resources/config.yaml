@@ -1,25 +1,27 @@
 #Configuration:
-  inputPath: /home/alex/work/testInput  #it should be a folder of an unpacked jar
-  outputPath: /home/alex/work/testOutput #where the classfile with injected faults will be
-  dependencyPath: /home/alex/work/dependency #it should be a folder of unpacked jars
-  activationLogFile: /tmp/activation.log # record whether an injected fault was ever activated
-  debug: false
-  activationMode: ALWAYS # ALWAYS/RANDOM/FIXED/CUSTOMIZED
-  activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is ALWAYS
-  activationIndex: 3 #only used when the activationMode is FIXED
-  
-  
-  #if not specified, each configuration item will be randomly assigned a value
-  singleRun:
-    type: VALUE_FAULT  #one of the 12 fault types
-    locationPattern:
-      packageP: com.alex.ssfi
-      classP: WorkBench
-      methodP: calculate
-      variableP: 
-    variableScope: 
-    variableType: int
-    action: 
-    targetValue: 
+inputPath: /home/alex/work/testInput  #it should be a folder of an unpacked jar
+outputPath: /home/alex/work/testOutput #where the classfile with injected faults will be
+dependencyPath: /home/alex/work/dependency #it should be a folder of unpacked jars
+activationLogFile: /tmp/activation.log # record whether an injected fault was ever activated
+debug: false
+activationMode: ALWAYS # ALWAYS/RANDOM/FIXED/CUSTOMIZED
+activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is ALWAYS
+activationIndex: 3 #only used when the activationMode is FIXED
+#  only used when the activationMode is CUSTOMZED
+customizedActivation: com.alex.ssfi.util.CustomActivationController
+
+
+#if not specified, each configuration item will be randomly assigned a value
+singleRun:
+  type: VALUE_FAULT  #one of the 12 fault types
+  locationPattern:
+    packageP: com.alex.ssfi
+    classP: WorkBench
+    methodP: calculate
+    variableP:
+  variableScope:
+  variableType: int
+  action:
+  targetValue:
 
  

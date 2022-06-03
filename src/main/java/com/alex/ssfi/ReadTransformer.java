@@ -18,30 +18,30 @@ import soot.util.Chain;
 /*
  * this class is only for learning how it identify different Jimple Statements
  */
-public class ReadTransformer extends BodyTransformer{
-	private RunningParameter parameters;
-	private static final Logger logger=LogManager.getLogger(ValueTransformer.class);
-	
-	public ReadTransformer(RunningParameter parameters) {
-		this.parameters=parameters;
-		
-	}
+public class ReadTransformer extends BodyTransformer {
+    private final RunningParameter parameters;
+    private static final Logger logger = LogManager.getLogger(ValueTransformer.class);
 
-	@Override
-	protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
-		// TODO Auto-generated method stub
-		String methodSignature=b.getMethod().getSignature();			
-		logger.info("Method signature:"+methodSignature);
-		logger.info("Phase Name:"+phaseName);
-		logger.info("Start to process Units:");
-		Chain<Unit> units=b.getUnits();
-		Iterator<Unit> stmIt=units.snapshotIterator();
-		while(stmIt.hasNext()) {
-			Stmt stmp=(Stmt)stmIt.next();
-			Reporter.checkStmtType(stmp);
-		}
-		logger.info("Done to process Units\n");
+    public ReadTransformer(RunningParameter parameters) {
+        this.parameters = parameters;
 
-	}
+    }
+
+    @Override
+    protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
+        // TODO Auto-generated method stub
+        String methodSignature = b.getMethod().getSignature();
+        logger.info("Method signature:" + methodSignature);
+        logger.info("Phase Name:" + phaseName);
+        logger.info("Start to process Units:");
+        Chain<Unit> units = b.getUnits();
+        Iterator<Unit> stmIt = units.snapshotIterator();
+        while (stmIt.hasNext()) {
+            Stmt stmp = (Stmt) stmIt.next();
+            Reporter.checkStmtType(stmp);
+        }
+        logger.info("Done to process Units\n");
+
+    }
 
 }
