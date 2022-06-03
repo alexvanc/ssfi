@@ -77,7 +77,7 @@ public class InjectionManager {
         Scene.v().addBasicClass("java.lang.String", SootClass.SIGNATURES);
         Scene.v().addBasicClass("java.lang.Long", SootClass.SIGNATURES);
         Scene.v().addBasicClass("java.io.OutputStreamWriter", SootClass.SIGNATURES);
-
+        Scene.v().addBasicClass(parameters.getCustomizedActivation(), SootClass.SIGNATURES);
 
         logger.debug("Start to inject: " + parameters.getID() + " with " + parameters.getFaultType() + " into "
                 + parameters.getClassWithPackage());
@@ -85,7 +85,9 @@ public class InjectionManager {
         PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", transformer));
 
         try {
-            MainWrapper.main(this.buildArgs(parameters.getClassWithPackage(), parameters.getInput(), parameters.getOutput()));
+            MainWrapper.main(this.buildArgs(parameters.getClassWithPackage(), parameters.getInput(),
+                    // Store output files according to faultID
+                    parameters.getOutput() + File.separator + parameters.getID()));
             if (parameters.isInjected()) {
                 logger.debug("Succeed to inject:" + parameters.getID() + " with " + parameters.getFaultType() + " into "
                         + parameters.getClassWithPackage());
@@ -110,7 +112,7 @@ public class InjectionManager {
     private String[] buildArgs(String classWithPackage, String input, String output) {
         String[] args;
         if (this.debugMode) {
-            args = new String[11];
+            args = new String[12];
 
             args[0] = "-cp";
             args[1] = ".:" + input;
@@ -128,10 +130,11 @@ public class InjectionManager {
             args[7] = "jimple";
             args[8] = "-d";
             args[9] = output;
-            args[10] = classWithPackage;
+            args[10] = "-keep-line-number";
+            args[11] = classWithPackage;
         } else {
 
-            args = new String[9];
+            args = new String[10];
             args[0] = "-cp";
             String fullClassPath = getAllClassPath(input);
             args[1] = fullClassPath;
@@ -147,7 +150,8 @@ public class InjectionManager {
             // args[9] = classWithPackage;
             args[6] = "-d";
             args[7] = output;
-            args[8] = classWithPackage;
+            args[8] = "-keep-line-number";
+            args[9] = classWithPackage;
         }
 
         return args;

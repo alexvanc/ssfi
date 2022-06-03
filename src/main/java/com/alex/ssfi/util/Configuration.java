@@ -19,6 +19,7 @@ public class Configuration {
 	private String targetValue;
 	private String exceptionType;
 	private float distribution;
+	private String customizedActivation;
 
 	// private static final Logger logger =
 	// LogManager.getLogger(Configuration.class);
@@ -28,6 +29,14 @@ public class Configuration {
 
 	public Configuration(String configFile) {
 
+	}
+
+	public String getCustomizedActivation() {
+		return customizedActivation;
+	}
+
+	public void setCustomizedActivation(String customizedActivation) {
+		this.customizedActivation = customizedActivation;
 	}
 
 	public int getActivationIndex() {

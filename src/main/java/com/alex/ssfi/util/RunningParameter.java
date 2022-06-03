@@ -21,6 +21,7 @@ public class RunningParameter {
 	private String variableValue;
 	private String methodName;
 	private String action;
+	private String customizedActivation;
 	private boolean injected = false;
 
 	public RunningParameter(SingleRun singleRun, String componentName, String jarName, String output,
@@ -56,6 +57,11 @@ public class RunningParameter {
 		this.action = config.getAction();
 		this.activationLogFile = config.getActivationLogFile();
 		this.classWithPackage = classWithPackage;
+		this.customizedActivation = config.getCustomizedActivation();
+	}
+
+	public String getCustomizedActivation() {
+		return customizedActivation;
 	}
 
 	public String getID() {

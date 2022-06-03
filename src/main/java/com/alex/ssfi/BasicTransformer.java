@@ -142,11 +142,14 @@ public abstract class BasicTransformer extends BodyTransformer {
 		if (this.parameters.getActivationMode().equals("CUSTOMIZED")) {
 			// call user-defined method
 
-			SootClass activationHelperClass = Scene.v().getSootClass("com.alex.ssfi.util.ActivationHelper");
+			SootClass activationHelperClass = Scene.v().getSootClass(this.parameters.getCustomizedActivation());
 			SootMethod activationMarker = activationHelperClass.getMethodByNameUnsafe("activate");
 			// tmpActivated
 			// convert long time to string time
-			InvokeStmt markActivationStmt=Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(activationMarker.makeRef(),StringConstant.v(this.parameters.getID())));
+			InvokeStmt markActivationStmt =
+					Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(
+							activationMarker.makeRef(),
+							StringConstant.v(this.parameters.getID())));
 			statements.add(markActivationStmt);
 			return statements;
 
@@ -246,6 +249,8 @@ public abstract class BasicTransformer extends BodyTransformer {
 	}
 
 	protected List<Stmt> getConditionStmt(Body b, Unit failTarget) {
+		this.injectInfo.put("LineNumber", String.valueOf(failTarget.getJavaSourceStartLineNumber()));
+		this.injectInfo.put("StringUnit", failTarget.toString());
 		List<Stmt> conditionStmts = new ArrayList<Stmt>();
 		String activationMode = this.parameters.getActivationMode();
 		Local tmpActivated = Jimple.v().newLocal("sootActivated", BooleanType.v());
@@ -305,11 +310,16 @@ public abstract class BasicTransformer extends BodyTransformer {
 		} else if (activationMode.equals("CUSTOMIZED")) {
 			// user-defined activation checking logic, SSFI just calls that user-defined
 			// method
-			SootClass activationHelperClass = Scene.v().getSootClass("com.alex.ssfi.util.ActivationHelper");
-			SootMethod activationChecker = activationHelperClass.getMethodByNameUnsafe("hasActivated");
-			AssignStmt checkActivationResult = Jimple.v().newAssignStmt(tmpActivated, Jimple.v()
-					.newStaticInvokeExpr(activationChecker.makeRef(), StringConstant.v(this.parameters.getID())));
-			IfStmt ifStmt1 = Jimple.v().newIfStmt(Jimple.v().newEqExpr(tmpActivated, IntConstant.v(1)), failTarget);
+			SootClass activationHelperClass = Scene.v().getSootClass(this.parameters.getCustomizedActivation());
+			SootMethod activationChecker = activationHelperClass.getMethodByNameUnsafe("shouldActivate");
+			AssignStmt checkActivationResult = Jimple.v().newAssignStmt(tmpActivated,
+					Jimple.v().newStaticInvokeExpr(
+							activationChecker.makeRef(),
+							StringConstant.v(this.parameters.getID()),
+							StringConstant.v(failTarget.toString()),
+							IntConstant.v(failTarget.getJavaSourceStartLineNumber())
+					));
+			IfStmt ifStmt1 = Jimple.v().newIfStmt(Jimple.v().newEqExpr(tmpActivated, IntConstant.v(0)), failTarget);
 			conditionStmts.add(checkActivationResult);
 			conditionStmts.add(ifStmt1);
 		}

@@ -7,6 +7,8 @@
   activationMode: ALWAYS # ALWAYS/RANDOM/FIXED/CUSTOMIZED
   activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is ALWAYS
   activationIndex: 3 #only used when the activationMode is FIXED
+#  only used when the activationMode is CUSTOMZED
+  customizedActivation: com.alex.ssfi.util.CustomActivationController
   
   
   #if not specified, each configuration item will be randomly assigned a value
