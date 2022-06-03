@@ -4,6 +4,8 @@ import com.alex.ssfi.util.RunningParameter;
 
 import soot.BodyTransformer;
 
+import java.util.Random;
+
 public class TransformerHelper {
 	public static final int VALUE_FAULT = 0;
 	public static final int NULL_FAULT = 1;
@@ -51,8 +53,9 @@ public class TransformerHelper {
 	}
 
 	public static int getFaultTypeIDByName(String faultType) {
-		if ((faultType == null) || (faultType == "")) {
-			return -1;
+		if ((faultType == null) || (faultType.equals(""))) {
+//			if fault type is not specified, this configuration item will be randomly assigned a value
+			return new Random().nextInt(12);
 		}
 		String upperCaseName = faultType.toUpperCase();
 		if (upperCaseName.equals("VALUE_FAULT")) {
