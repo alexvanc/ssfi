@@ -52,7 +52,7 @@ public class InjectionManager {
         List<String> allClassName = this.getFullClassName();
 
         if (allClassName == null || allClassName.isEmpty()) {
-            logger.error("Failed to find a possible targeting class file!");
+            logger.error("startInjection: Failed to find a possible targeting class file!");
             return false;
         }
         logger.debug("Prepare to inject one fault with possible classes number" + allClassName.size());
@@ -86,6 +86,7 @@ public class InjectionManager {
         Scene.v().addBasicClass("java.lang.String", SootClass.SIGNATURES);
         Scene.v().addBasicClass("java.lang.Long", SootClass.SIGNATURES);
         Scene.v().addBasicClass("java.io.OutputStreamWriter", SootClass.SIGNATURES);
+//        add CustomActivationController class for CUSTOMIZED activationMode
         Scene.v().addBasicClass(runningParameters.getCustomizedActivation(), SootClass.SIGNATURES);
 
         logger.debug("Start to inject: " + runningParameters.getID() + " with " + runningParameters.getFaultType() + " into "
@@ -107,8 +108,7 @@ public class InjectionManager {
 
         } catch (Exception e) {
             logger.debug("Exception during injecting:" + runningParameters.getID() +
-                    " with " + runningParameters.getFaultType() + " into " + targetClass);
-            logger.error(e.getMessage());
+                    " with " + runningParameters.getFaultType() + " into " + targetClass, e);
             return false;
         } finally {
             PackManager.v().getPack("jtp").remove("jtp.instrumenter");

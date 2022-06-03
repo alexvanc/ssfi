@@ -12,16 +12,16 @@ customizedActivation: com.alex.ssfi.util.CustomActivationController
 
 
 #if not specified, each configuration item will be randomly assigned a value
-singleRun:
-  type: VALUE_FAULT  #one of the 12 fault types
-  locationPattern:
-    packageP: com.alex.ssfi
-    classP: WorkBench
-    methodP: calculate
-    variableP:
-  variableScope:
-  variableType: int
-  action:
-  targetValue:
+
+type: VALUE_FAULT  #one of the 12 fault types
+locationPattern:
+  packageP:
+  classP: WorkBench
+  methodP: calculate
+  variableP:
+variableScope:
+variableType: int
+action:
+targetValue:
 
  
