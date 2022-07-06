@@ -34,9 +34,6 @@ public class MainWrapper {
         return G.v().soot_Main();
     }
 
-    // TODO: the following string should be updated by the source control
-    // No it shouldn't. Prcs is horribly broken in this respect, and causes
-    // the code to not compile all the time.
     public static final String versionString = MainWrapper.class.getPackage().getImplementationVersion() == null ? "trunk"
             : MainWrapper.class.getPackage().getImplementationVersion();
 
@@ -136,48 +133,6 @@ public class MainWrapper {
             System.err.println("" + "To allocate more memory to Soot, use the -Xmx switch to Java.");
             System.err.println("" + "For example (for 2GB): java -Xmx2g soot.Main ...");
             throw e;
-//    } catch (RuntimeException e) {
-//      e.printStackTrace();
-//
-//      ByteArrayOutputStream bos = new ByteArrayOutputStream();
-//      e.printStackTrace(new PrintStream(bos));
-//      String stackStraceString = bos.toString();
-//      try {
-//        final String TRACKER_URL = "https://github.com/Sable/soot/issues/new?";
-//        String commandLineArgs = Joiner.on(" ").join(args);
-//        String body = "Steps to reproduce:\n1.) ...\n\n" + "Files used to reproduce: \n...\n\n" + "Soot version: " + "<pre>"
-//            + escape(versionString) + "</pre>" + "\n\n" + "Command line:\n" + "<pre>" + escape(commandLineArgs)
-//            + "</pre>\n\n" + "Max Memory:\n" + "<pre>" + escape((Runtime.getRuntime().maxMemory() / (1024 * 1024)) + "MB")
-//            + "</pre>" + "\n\n" + "Stack trace:\n" + "<pre>" + escape(stackStraceString) + "</pre>";
-//
-//        String title = e.getClass().getName() + " when ...";
-//
-//        StringBuilder sb = new StringBuilder();
-//        sb.append("\n\nOuuups... something went wrong! Sorry about that.\n");
-//        sb.append("Follow these steps to fix the problem:\n");
-//        sb.append("1.) Are you sure you used the right command line?\n");
-//        sb.append("    Click here to double-check:\n");
-//        sb.append("    https://github.com/Sable/soot/wiki/Options-and-JavaDoc\n");
-//        sb.append("\n");
-//        sb.append("2.) Not sure whether it's a bug? Feel free to discuss\n");
-//        sb.append("    the issue on the Soot mailing list:\n");
-//        sb.append("    https://github.com/Sable/soot/wiki/Getting-help\n");
-//        sb.append("\n");
-//        sb.append("3.) Sure it's a bug? Click this link to report it.\n");
-//        sb.append("    " + TRACKER_URL + "title=" + encode(title, "UTF-8") + "&body=" + encode(body, "UTF-8") + "\n");
-//        sb.append("    Please be as precise as possible when giving us\n");
-//        sb.append("    information on how to reproduce the problem. Thanks!");
-//
-//        System.err.println(sb);
-//
-//        // Exit with an exit code 1
-//        System.exit(1);
-//
-//      } catch (UnsupportedEncodingException e1) {
-//
-//        // Exit with an exit code 1
-////        System.exit(1);
-//      }
         }
     }
 

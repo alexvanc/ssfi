@@ -20,23 +20,21 @@ public class Application {
             return;
         }
 
-        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        ObjectMapper mapper = new ObjectMapper(new YAMLFactory()); // 构建YAML Mapper，用以从配置文件提取配置项
         Configuration config;
         try {
-//            Parse configuration parameters from yaml file
-            config = mapper.readValue(new File(args[0]), Configuration.class);
-            if (!config.validateConfig()) {
+            config = mapper.readValue(new File(args[0]), Configuration.class); // 从配置文件，读取配置
+            if (!config.validateConfig()) { // 验证配置项合法性
                 logger.fatal("Invalid Configuration!");
                 return;
             }
-//            Start fault injection
-            if (InjectionManager.getManager(config).startInjection()) {
-                logger.info("Injection Succeed!");
-            } else {
+            if (InjectionManager.getManager(config).startInjection()) { // 根据配置，执行故障注入
+                logger.info("Injection Succeed!"); // 若故障注入成功
+            } else { // 若故障注入失败
                 logger.error("Injection Failed!");
             }
 
-        } catch (Exception e) {
+        } catch (Exception e) { // 若注入过程发生异常
             logger.info("Injection Failed!");
             logger.fatal(e.getMessage());
             System.exit(0);

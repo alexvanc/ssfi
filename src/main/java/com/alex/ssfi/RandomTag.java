@@ -15,12 +15,10 @@ public class RandomTag implements Tag {
     }
 
     public String getName() {
-        // TODO Auto-generated method stub
         return "sootTargetCounter";
     }
 
     public byte[] getValue() throws AttributeValueException {
-        // TODO Auto-generated method stub
         ByteArrayOutputStream baos = new ByteArrayOutputStream(4);
         DataOutputStream dos = new DataOutputStream(baos);
         try {

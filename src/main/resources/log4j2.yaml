@@ -4,7 +4,7 @@ Configuration:
   properties:
     property:
       name: injectfile
-      value: /tmp/injection.log
+      value: tmp/injection.log
   thresholdFilter:
     level: debug
   appenders:

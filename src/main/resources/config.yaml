@@ -1,27 +1,26 @@
 #Configuration:
-inputPath: /home/alex/work/testInput  #it should be a folder of an unpacked jar
-outputPath: /home/alex/work/testOutput #where the classfile with injected faults will be
-dependencyPath: /home/alex/work/dependency #it should be a folder of unpacked jars
-activationLogFile: /tmp/activation.log # record whether an injected fault was ever activated
+inputPath: testInput  #it should be a folder of an unpacked jar
+outputPath: testOutput #where the classfile with injected faults will be
+dependencyPath: dependency #it should be a folder of unpacked jars # 必须给定一个有效值，否则报错
+activationLogFile: tmp/activation.log # record whether an injected fault was ever activated
 debug: false
 activationMode: ALWAYS # ALWAYS/RANDOM/FIXED/CUSTOMIZED
-activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is ALWAYS
-activationIndex: 3 #only used when the activationMode is FIXED
-#  only used when the activationMode is CUSTOMZED
-customizedActivation: com.alex.ssfi.util.CustomActivationController
+activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is RANDOM
+activationIndex: 3 # only used when the activationMode is FIXED
+customizedActivation: com.alex.ssfi.util.CustomActivationController #  only used when the activationMode is CUSTOMIZED
 
 
 #if not specified, each configuration item will be randomly assigned a value
 
-type: VALUE_FAULT  #one of the 12 fault types
+type: #one of the 12 fault types
 locationPattern:
-  packageP:
-  classP: WorkBench
-  methodP: calculate
-  variableP:
-variableScope:
-variableType: int
-action:
-targetValue:
+  packageP: # 待故障注入的package的名字
+  classP: # 待故障注入的class的名字
+  methodP: # 待故障注入的method的名字
+  variableP:  # 待故障注入的variable的名字
+variableScope: #local/field/parameter
+variableType: # byte/short/int/long/float/double/string
+action: # TO/ADD/SUB，与variable类型相关
+targetValue: # 故障注入时辅助用的value，例如替代为该value，或与该value相加减
 
  

@@ -23,24 +23,7 @@ public class RunningParameter {
     private String customizedActivation;
     private boolean injected = false;
 
-    public RunningParameter(SingleRun singleRun, String componentName, String jarName, String output,
-                            String activationMode, int activationRate) {
-        this.ID = IDHelper.generateID(20);
-        this.output = output;
-        this.activationMode = activationMode;
-        this.activationRate = activationRate;
-        this.componentName = componentName;
-        this.jarName = jarName;
-        this.methodName = singleRun.getMethodPattern();
-        this.variableScope = singleRun.getVariableScope();
-        this.variableType = singleRun.getVariableType();
-        this.variableName = singleRun.getVariablePattern();
-        this.variableValue = singleRun.getTargetValue();
-        this.action = singleRun.getAction();
-        // int faultTypeID=FaultTypeHelper.getValueTypeIDByName(singleRun.getType());
-    }
-
-    public RunningParameter(Configuration config) {
+    public RunningParameter(Configuration config) { // 根据config构建RunningParameter实例
         this.ID = IDHelper.generateID(20);
         this.faultType = config.getType();
         this.input = config.getInputPath();

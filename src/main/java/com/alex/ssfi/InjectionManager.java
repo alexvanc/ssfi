@@ -31,44 +31,45 @@ public class InjectionManager {
     private String className;
     private final RunningParameter runningParameters;
 
-    private InjectionManager(Configuration config) {
-        this.debugMode = config.isDebug();
-        this.inputPath = config.getInputPath();
-        this.outputPath = config.getOutputPath();
-        this.dependencyPath = config.getDependencyPath();
-        this.subPackage = config.getPackagePattern();
-        this.className = config.getClassPattern();
-        this.runningParameters = new RunningParameter(config);
+    private InjectionManager(Configuration config) { // 根据config构建InjectionManage实例
+        this.debugMode = config.isDebug(); // 获取是否开启debug模式的标识
+        this.inputPath = config.getInputPath();  // 获取输入路径
+        this.outputPath = config.getOutputPath();  // 获取输出路径
+        this.dependencyPath = config.getDependencyPath(); // 获取依赖路径
+        this.subPackage = config.getPackagePattern(); // 获取目标包名
+        this.className = config.getClassPattern(); // 获取目标类名
+        this.runningParameters = new RunningParameter(config); // 根据config构建RunningParameter实例
     }
 
-    public static InjectionManager getManager(Configuration config) {
+    public static InjectionManager getManager(Configuration config) { // 获取InjectionManage实例
         if (instance == null) {
             instance = new InjectionManager(config);
         }
         return instance;
     }
 
+    // 根据配置，执行故障注入
     public boolean startInjection() {
-        List<String> allClassName = this.getFullClassName();
+        List<String> allClassName = this.getFullClassName(); // 获取所有class的文件路径
 
-        if (allClassName == null || allClassName.isEmpty()) {
+        if (allClassName == null || allClassName.isEmpty()) { // 若没有待故障注入的class, 则报错
             logger.error("startInjection: Failed to find a possible targeting class file!");
             return false;
         }
         logger.debug("Prepare to inject one fault with possible classes number" + allClassName.size());
-        while (true) {
-            if (allClassName.isEmpty()) {
+        while (true) { // 一直尝试进行故障注入，直到成功注入故障一次或对所有class进行过尝试
+            if (allClassName.isEmpty()) { // 若待注入故障的class集为空，则报错
                 // generate unqualified report
                 logger.error("Failed to find a qualified class to inject a fault!");
                 return false;
             }
 
-            int index = new Random().nextInt(allClassName.size());
-            String targetPath = allClassName.remove(index);
+            int index = new Random().nextInt(allClassName.size()); // 随机选取待注入故障的class的索引
+            String targetPath = allClassName.remove(index); // 获取待注入故障的class，并从待注入故障的class集中删除将要尝试的class
 
-            int start = targetPath.indexOf(inputPath) + inputPath.length() + 1;
-            int end = targetPath.indexOf(".class");
-            String classWithPackage = targetPath.substring(start, end).replace(File.separatorChar, '.');
+            int start = targetPath.indexOf(inputPath) + inputPath.length() + 1; // 计算目标类名，在文件路径中的开始位置
+            int end = targetPath.indexOf(".class"); // 计算目标类名，在文件路径中的结束位置
+            String classWithPackage = targetPath.substring(start, end).replace(File.separatorChar, '.'); // 计算class的名称（带包名）
 
 
             if (this.injectFault(classWithPackage)) {
@@ -80,6 +81,7 @@ public class InjectionManager {
 
     private boolean injectFault(String targetClass) {
 
+        // 在Soot.Scene中添加基础Class
         Scene.v().addBasicClass("java.io.FileWriter", SootClass.SIGNATURES);
         Scene.v().addBasicClass("java.io.Writer", SootClass.SIGNATURES);
         Scene.v().addBasicClass("java.lang.System", SootClass.SIGNATURES);
@@ -91,48 +93,42 @@ public class InjectionManager {
 
         logger.debug("Start to inject: " + runningParameters.getID() + " with " + runningParameters.getFaultType() + " into "
                 + targetClass);
-        BodyTransformer transformer = TransformerHelper.getTransformer(runningParameters.getFaultType(), runningParameters);
-        PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", transformer));
+        BodyTransformer transformer = TransformerHelper.getTransformer(runningParameters.getFaultType(), runningParameters); // 根据运行时参数，构建故障注入用的BodyTransformer对象
+        PackManager.v().getPack("jtp").add(new Transform("jtp.instrumenter", transformer)); // 利用PackManager，在jtp中添加故障注入用的BodyTransformer对象，使得之后的Soot.Main()将会执行该BodyTransformer对象
 
         try {
-            MainWrapper.main(this.buildArgs(targetClass));
-            if (runningParameters.isInjected()) {
+            MainWrapper.main(this.buildArgs(targetClass)); // 构建Soot.Main()的参数，并调用Soot.Main()开始注入
+            if (runningParameters.isInjected()) { // 若注入成功
                 logger.debug("Succeed to inject:" + runningParameters.getID() +
                         " with " + runningParameters.getFaultType() + " into " + targetClass);
                 return true;
-            } else {
+            } else { // 若注入失败
                 logger.debug("Failed to inject:" + runningParameters.getID() +
                         " with " + runningParameters.getFaultType() + " into " + targetClass);
                 return false;
             }
 
-        } catch (Exception e) {
+        } catch (Exception e) { // 若注入过程中发生异常
             logger.debug("Exception during injecting:" + runningParameters.getID() +
                     " with " + runningParameters.getFaultType() + " into " + targetClass, e);
             return false;
         } finally {
-            PackManager.v().getPack("jtp").remove("jtp.instrumenter");
-            G.reset();
+            PackManager.v().getPack("jtp").remove("jtp.instrumenter"); // 移除jtp中用于本次故障注入的BodyTransformer
+            G.reset(); // 重置G
         }
     }
 
+    // 构建Soot.Main()的参数
     private String[] buildArgs(String classWithPackage) {
         String[] args;
         if (this.debugMode) {
             args = new String[12];
-
             args[0] = "-cp";
             args[1] = ".:" + inputPath;
             args[2] = "-pp";
             args[3] = "-p";
             args[4] = "jb";
             args[5] = "use-original-names:true";
-            // args[6] = "-w";
-            // args[7] = "-f";
-            // args[8] = "jimple";
-            // args[9] = "-d";
-            // args[10] = output;
-            // args[11] = classWithPackage;
             args[6] = "-f";
             args[7] = "jimple";
             args[8] = "-d";
@@ -141,7 +137,6 @@ public class InjectionManager {
             args[10] = "-keep-line-number";
             args[11] = classWithPackage;
         } else {
-
             args = new String[10];
             args[0] = "-cp";
             String fullClassPath = getAllClassPath(inputPath);
@@ -151,18 +146,12 @@ public class InjectionManager {
             args[3] = "-p";
             args[4] = "jb";
             args[5] = "use-original-names:true";
-            // args[6] = "-w";
-
-            // args[7] = "-d";
-            // args[8] = output;
-            // args[9] = classWithPackage;
             args[6] = "-d";
             // Store output files according to faultID
             args[7] = outputPath + File.separator + runningParameters.getID();
             args[8] = "-keep-line-number";
             args[9] = classWithPackage;
         }
-
         return args;
     }
 
@@ -180,10 +169,11 @@ public class InjectionManager {
             }
             return fullClassPath.toString();
         } else {
-            return fullClassPath + inputPath;
+            return fullClassPath.append(":").append(inputPath).toString();
         }
     }
 
+    // 获取全部的class名
     private List<String> getFullClassName() {
         String rootPackage;
         if (subPackage == null || subPackage.equals("")) {
@@ -201,6 +191,7 @@ public class InjectionManager {
 
     }
 
+    // 获取全部符合要求的class名
     private List<String> getQualifiedFullClass(File folder) {
         List<String> allFullClassName = new ArrayList<String>();
         File[] files = folder.listFiles();
@@ -219,12 +210,4 @@ public class InjectionManager {
         }
         return allFullClassName;
     }
-
-    /*
-     * Summarize the fault injection experiments
-     */
-    private void generateReport() {
-        // TODO
-    }
-
 }

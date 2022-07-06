@@ -29,7 +29,6 @@ public class ReadTransformer extends BodyTransformer {
 
     @Override
     protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
-        // TODO Auto-generated method stub
         String methodSignature = b.getMethod().getSignature();
         logger.info("Method signature:" + methodSignature);
         logger.info("Phase Name:" + phaseName);

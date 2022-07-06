@@ -5,6 +5,11 @@
 *.patch
 .checkstyle
 
+testDependency/
+testInput/
+testOutput/
+tmp/
+
 # Mac files:
 .DS_Store
 
