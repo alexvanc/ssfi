@@ -9,6 +9,8 @@ testDependency/
 testInput/
 testOutput/
 tmp/
+ssfi.jar
+config.yaml
 
 # Mac files:
 .DS_Store
