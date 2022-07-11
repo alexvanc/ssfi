@@ -133,40 +133,46 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 		this.allQualifiedMethods = allQualifiedMethods;
 	}
 
+	// 执行注入操作
 	private boolean inject(Body b, String action) {
 		this.injectInfo.put("Action", action);
 
 		try {
-			if (action.equals("field2local")) {
+			if (action.equals("field2local")) {// 若待注入操作为"field2local"
 
-				List<FieldWithLocal> allTuples = this.getAllUsedFieldStmt(b);
+				List<FieldWithLocal> allTuples = this.getAllUsedFieldStmt(b); // 获取全部使用了Field的语句
 				while (true) {
 					int stmtSize = allTuples.size();
 					if (stmtSize == 0) {
 						break;
 					}
+
+					// 选取待注入的Field使用语句
 					int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtSize);
 					FieldWithLocal targetTuple = allTuples.get(stmtIndex);
 					allTuples.remove(stmtIndex);
 
-					if (this.injectLocalShadowField(b, targetTuple)) {
+					if (this.injectLocalShadowField(b, targetTuple)) {// 注入field2local故障
 						return true;
 					}
 
 				}
 
-			} else if (action.equals("local2field")) {
+			} else if (action.equals("local2field")) {// 若待注入操作为"local2field"
 
-				List<FieldWithLocal> allTuples = this.getAllUsedLocalStmt(b);
+				List<FieldWithLocal> allTuples = this.getAllUsedLocalStmt(b);// 获取全部使用了Local的语句
 				while (true) {
 					int stmtSize = allTuples.size();
 					if (stmtSize == 0) {
 						break;
 					}
+
+					// 选取待注入的Local使用语句
 					int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtSize);
 					FieldWithLocal targetTuple = allTuples.get(stmtIndex);
 					allTuples.remove(stmtIndex);
-					if (this.injectFieldShadowLocal(b, targetTuple)) {
+
+					if (this.injectFieldShadowLocal(b, targetTuple)) {// 注入local2field故障
 						return true;
 					}
 				}
@@ -180,17 +186,19 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 		return false;
 	}
 
+	// 获取注入操作集合
 	private List<String> getTargetAction(String action) {
 		List<String> actions = new ArrayList<String>();
 		if ((action == null) || (action == "")) {
-			actions.add("field2local");
-			actions.add("local2field");
+			actions.add("field2local");// 待注入操作集合 增加field2local操作
+			actions.add("local2field");// 待注入操作集合 增加local2field操作
 		} else {
-			actions.add(action);
+			actions.add(action);// 待注入操作集合 增加指定操作
 		}
 		return actions;
 	}
 
+	// 注入local2field故障
 	private boolean injectFieldShadowLocal(Body b, FieldWithLocal targetTuple) {
 		Chain<Unit> units = b.getUnits();
 		Local local = targetTuple.getLocal();
@@ -204,7 +212,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 			}
 
 			int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtSize);
-			Stmt targetStmt = stmts.get(stmtIndex);
+			Stmt targetStmt = stmts.get(stmtIndex); // 获取待注入的目标语句
 			Unit nextUnit = units.getSuccOf(targetStmt);
 			stmts.remove(stmtIndex);
 			Stmt clonedStmt = (Stmt) targetStmt.clone();
@@ -224,44 +232,44 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 						}
 						if (isStaticField) {
 							copyFieldToLocal = Jimple.v().newAssignStmt(fieldLocal,
-									Jimple.v().newStaticFieldRef(field.makeRef()));
+									Jimple.v().newStaticFieldRef(field.makeRef())); // fieldLocal = field
 						} else {
 							// if this method is a static method, we try to replace the local with a
 							// instanceField, error reported
 							copyFieldToLocal = Jimple.v().newAssignStmt(fieldLocal,
-									Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef()));
+									Jimple.v().newInstanceFieldRef(b.getThisLocal(), field.makeRef())); // fieldLocal = field
 						}
-						units.insertBefore(copyFieldToLocal, targetStmt);
-						box.setValue(fieldLocal);
-						units.insertBefore(clonedStmt, targetStmt);
+						units.insertBefore(copyFieldToLocal, targetStmt); // fieldLocal = field
+						box.setValue(fieldLocal); // 将Local的使用改为Field的使用
+						units.insertBefore(clonedStmt, targetStmt); // 使用fieldLocal
 
-						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);// 获取检查语句，检测激活模式，
 						for (int i = 0; i < preStmts.size(); i++) {
 							if (i == 0) {
-								units.insertBefore(preStmts.get(i), copyFieldToLocal);
+								units.insertBefore(preStmts.get(i), copyFieldToLocal);// 首句在copyFieldToLocal前插入
 							} else {
-								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));// 之后每句在前一句之后插入
 							}
 						}
-						List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);
+						List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);// 获取条件语句，根据激活模式或条件判断是否激活故障
 						for (int i = 0; i < conditionStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));// 首句在preStmts[-1]后插入
 							} else {
-								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));// 之后每句在前一句之后插入
 							}
 						}
 
-						List<Stmt> actStmts = this.createActivateStatement(b);
+						List<Stmt> actStmts = this.createActivateStatement(b);// 获取故障注入后的操作语句，记录日志等
 						for (int i = 0, actStmtSize = actStmts.size(); i < actStmtSize; i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));// 首句在conditionStmts[-1]后插入
 							} else {
-								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));// 之后每句在前一句之后插入
 							}
 						}
 
-						GotoStmt skipInvoke = Jimple.v().newGotoStmt(nextUnit);
+						GotoStmt skipInvoke = Jimple.v().newGotoStmt(nextUnit);// goto语句 goto nextUnit，跳过原Field使用语句
 						units.insertAfter(skipInvoke, clonedStmt);
 						return true;
 					}
@@ -274,6 +282,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 
 	}
 
+	// 注入fiel2locald故障
 	private boolean injectLocalShadowField(Body b, FieldWithLocal targetTuple) {
 		Chain<Unit> units = b.getUnits();
 		Local local = targetTuple.getLocal();
@@ -285,7 +294,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 				break;
 			}
 			int stmtIndex = new Random(System.currentTimeMillis()).nextInt(stmtSize);
-			Stmt targetStmt = stmts.get(stmtIndex);
+			Stmt targetStmt = stmts.get(stmtIndex);// 获取待注入的目标语句
 			Unit nextUnit = units.getSuccOf(targetStmt);
 			stmts.remove(stmtIndex);
 			Stmt clonedStmt = (Stmt) targetStmt.clone();
@@ -297,30 +306,30 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 				if ((value instanceof Local) && (value.equals(fieldLocal))) {
 
 					if (box.canContainValue(local)) {
-						box.setValue(local);
-						units.insertBefore(clonedStmt, targetStmt);
-						List<Stmt> preStmts = this.getPrecheckingStmts(b);
+						box.setValue(local);// 将Field的使用改为Local的使用
+						units.insertBefore(clonedStmt, targetStmt);// 使用local
+						List<Stmt> preStmts = this.getPrecheckingStmts(b);// 获取检查语句，检测激活模式，
 						for (int i = 0; i < preStmts.size(); i++) {
 							if (i == 0) {
-								units.insertBefore(preStmts.get(i), clonedStmt);
+								units.insertBefore(preStmts.get(i), clonedStmt);// 首句在clonedStmt前插入
 							} else {
-								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));
+								units.insertAfter(preStmts.get(i), preStmts.get(i - 1));// 之后每句在前一句之后插入
 							}
 						}
-						List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);
+						List<Stmt> conditionStmts = this.getConditionStmt(b, targetStmt);// 获取条件语句，根据激活模式或条件判断是否激活故障
 						for (int i = 0; i < conditionStmts.size(); i++) {
 							if (i == 0) {
-								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));
+								units.insertAfter(conditionStmts.get(i), preStmts.get(preStmts.size() - 1));// 首句在preStmts[-1]后插入
 							} else {
-								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));
+								units.insertAfter(conditionStmts.get(i), conditionStmts.get(i - 1));// 之后每句在前一句之后插入
 							}
 						}
-						List<Stmt> actStmts = this.createActivateStatement(b);
+						List<Stmt> actStmts = this.createActivateStatement(b);// 获取故障注入后的操作语句，记录日志等
 						for (int i = 0, actStmtSize = actStmts.size(); i < actStmtSize; i++) {
 							if (i == 0) {
-								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));
+								units.insertAfter(actStmts.get(i), conditionStmts.get(conditionStmts.size() - 1));// 首句在conditionStmts[-1]后插入
 							} else {
-								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));
+								units.insertAfter(actStmts.get(i), actStmts.get(i - 1));// 之后每句在前一句之后插入
 							}
 						}
 						GotoStmt skipInvoke = Jimple.v().newGotoStmt(nextUnit);
@@ -334,9 +343,10 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 		return false;
 	}
 
+	// 获取全部Filed使用语句
 	private List<FieldWithLocal> getAllUsedFieldStmt(Body b) {
 		List<FieldWithLocal> allTuples = new ArrayList<FieldWithLocal>();
-		Iterator<SootField> fieldItr = b.getMethod().getDeclaringClass().getFields().snapshotIterator();
+		Iterator<SootField> fieldItr = b.getMethod().getDeclaringClass().getFields().snapshotIterator();// 获取所有的Field
 
 		while (fieldItr.hasNext()) {
 			SootField field = fieldItr.next();
@@ -354,13 +364,13 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 					// found a local with the same name and type of this field
 					if (name.equals(field.getName())
 							&& field.getType().toString().contentEquals(local.getType().toString())) {
-						List<Stmt> stmts = this.getAllStmtsUsingLocal(b, fieldLocal);
+						List<Stmt> stmts = this.getAllStmtsUsingLocal(b, fieldLocal); // 获取fieldLocal的全部使用语句
 						if (stmts.size() != 0) {
 							FieldWithLocal tuple = new FieldWithLocal();
-							tuple.setField(field);
-							tuple.setFieldLocal(fieldLocal);
-							tuple.setLocal(local);
-							tuple.setStmts(stmts);
+							tuple.setField(field); // 记录Field变量
+							tuple.setFieldLocal(fieldLocal);// 记录Field在局部变量中的代理（fieldLocal=field）
+							tuple.setLocal(local); // 记录Local变量
+							tuple.setStmts(stmts); // 记录fieldLocal的使用语句
 							allTuples.add(tuple);
 						}
 						break;
@@ -375,17 +385,17 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 
 	// Actually every field is first assigned to a local variable
 	// so we just need to find the local variable
-	private List<FieldWithLocal> getAllUsedLocalStmt(Body b) {
+	private List<FieldWithLocal> getAllUsedLocalStmt(Body b) {// 获取全部Local使用语句
 		List<FieldWithLocal> allTuples = new ArrayList<FieldWithLocal>();
 
 		Iterator<Local> localItr = b.getLocals().snapshotIterator();
-		while (localItr.hasNext()) {
+		while (localItr.hasNext()) { // 对于每一个可能的local
 			Local local = localItr.next();
 			try {
 				SootField field = b.getMethod().getDeclaringClass().getField(local.getName(), local.getType());
-				List<Stmt> stmts = this.getAllStmtsUsingLocal(b, local);
+				List<Stmt> stmts = this.getAllStmtsUsingLocal(b, local); // 获取全部的Local使用语句
 				FieldWithLocal tuple = new FieldWithLocal();
-				Local fieldLocal = this.getFieldLocal(b, field);
+				Local fieldLocal = this.getFieldLocal(b, field);//获取field对应的local
 				if (stmts.size() == 0) {
 					continue;
 				}
@@ -393,10 +403,10 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 					Local fieldProxy = Jimple.v().newLocal("soot" + field.getName() + "Proxy", field.getType());
 					b.getLocals().add(fieldProxy);
 				}
-				tuple.setField(field);
-				tuple.setLocal(local);
-				tuple.setStmts(stmts);
-				tuple.setFieldLocal(fieldLocal);
+				tuple.setField(field);// 记录field变量
+				tuple.setLocal(local);// 记录local变量
+				tuple.setStmts(stmts);// local的使用语句
+				tuple.setFieldLocal(fieldLocal); // 记录Field在局部变量中的代理（fieldLocal=field）
 				allTuples.add(tuple);
 			} catch (Exception e) {
 				// cannot found corresponding field
@@ -407,6 +417,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 
 	}
 
+	// 获取local变量的全部使用语句
 	private List<Stmt> getAllStmtsUsingLocal(Body b, Local local) {
 		List<Stmt> stmts = new ArrayList<Stmt>();
 		Iterator<Unit> unitItr = b.getUnits().snapshotIterator();
@@ -424,6 +435,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 		return stmts;
 	}
 
+	// 获取Field对应Local
 	private Local getFieldLocal(Body b, SootField field) {
 		List<Local> allPossibleLocals = new ArrayList<Local>();
 		// actually a field could be assign to many different locals
@@ -452,6 +464,7 @@ public class ShadowingAttributeTransformer extends BasicTransformer {//lhy 这�
 		}
 	}
 
+	// 连接Field变量、Local变量、Field在局部的代理变量（fieldLocal=field）、fieldLocal或Local的使用语句集
 	class FieldWithLocal {
 		private SootField field;
 		private Local local;

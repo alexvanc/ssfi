@@ -53,22 +53,22 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
         this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());// 获取目标包名
         this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());// 获取目标类名
         this.injectInfo.put("Method", targetMethod.getSubSignature());// 获取目标函数签名
-        List<String> scopes = getTargetScope(this.parameters.getVariableScope());// 获取目标命名空间集合
+        List<String> scopes = getTargetScope(this.parameters.getVariableScope());// 获取目标域集合
 
         logger.debug("Try to inject EXCEPTION_SHORTCIRCUIT_FAULT into " + this.injectInfo.get("Package") + " "
                 + this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
 
         // randomly combine scope
         while (true) {
-            int scopesSize = scopes.size();// 获取待注入的命名空间集合
+            int scopesSize = scopes.size();// 获取待注入的域集合
             if (scopesSize == 0) {
                 logger.debug("Cannot find qualified scopes");
                 break;
             }
-            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);// 随机选择待注入的命名空间的索引
-            String scope = scopes.get(scopeIndex);// 获取待注入的命名空间
-            scopes.remove(scopeIndex);// 在待注入的命名空间集合中，移除将要进行尝试的命名空间
-            this.injectInfo.put("VariableScope", scope);// 记录待注入的命名空间
+            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);// 随机选择待注入的域的索引
+            String scope = scopes.get(scopeIndex);// 获取待注入的域
+            scopes.remove(scopeIndex);// 在待注入的域集合中，移除将要进行尝试的域
+            this.injectInfo.put("VariableScope", scope);// 记录待注入的域
 
             // finally perform injection
             if (this.inject(b, scope)) {// 进行注入
@@ -370,12 +370,12 @@ public class ExceptionShortCircuitTransformer extends BasicTransformer {
 
     // 获取待注入variable的类别
     private List<String> getTargetScope(String variableScope) {
-        List<String> scopes = new ArrayList<String>();// 声明待注入命名空间集合列表
-        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入命名空间
-            scopes.add("throw");// 待注入命名空间集合添加"throw"类
-            scopes.add("catch");// 待注入命名空间集合添加"catch"类
-        } else {// 若指定待注入命名空间
-            scopes.add(variableScope);// 直接在注入命名空间集合添加指定的命名空间类型
+        List<String> scopes = new ArrayList<String>();// 声明待注入域集合列表
+        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入域
+            scopes.add("throw");// 待注入域集合添加"throw"类
+            scopes.add("catch");// 待注入域集合添加"catch"类
+        } else {// 若指定待注入域
+            scopes.add(variableScope);// 直接在注入域集合添加指定的域类型
         }
         return scopes;
     }

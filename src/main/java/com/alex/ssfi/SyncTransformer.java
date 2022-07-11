@@ -62,7 +62,7 @@ public class SyncTransformer extends BasicTransformer {
         this.injectInfo.put("Method", targetMethod.getSubSignature());// 获取目标函数签名
         this.injectInfo.put("ActivationMode", "always");
 
-        List<String> scopes = getSyncScope(this.parameters.getVariableScope());//获取全部可注入的命名空间
+        List<String> scopes = getSyncScope(this.parameters.getVariableScope());//获取全部可注入的域
 
         logger.debug("Try to inject Value_FAULT into " + this.injectInfo.get("Package") + " "
                 + this.injectInfo.get("Class") + " " + this.injectInfo.get("Method"));
@@ -70,12 +70,12 @@ public class SyncTransformer extends BasicTransformer {
         // randomly combine scope, type , variable, action
         while (true) {
             int scopesSize = scopes.size();
-            if (scopesSize == 0) {//若全部的待注入的命名空间数目为0，则退出循环
+            if (scopesSize == 0) {//若全部的待注入的域数目为0，则退出循环
                 logger.debug("Cannot find qualified scopes");
                 break;
             }
-            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);//随机选取目标命名空间索引
-            String scope = scopes.get(scopeIndex);//获取目标命名空间
+            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);//随机选取目标域索引
+            String scope = scopes.get(scopeIndex);//获取目标域
             scopes.remove(scopeIndex);
             this.injectInfo.put("VariableScope", scope);
             // injection sync fault for methods
@@ -109,7 +109,7 @@ public class SyncTransformer extends BasicTransformer {
 
     // 执行注入操作
     private boolean inject(Body b, String scope, String action) {
-        if (scope.equals("method")) {// 若目标命名空间为"method"
+        if (scope.equals("method")) {// 若目标域为"method"
             return this.injectMethodWithAction(b, action); // 注入Method
 
         } else {// block
@@ -181,14 +181,14 @@ public class SyncTransformer extends BasicTransformer {
         return false;
     }
 
-    // 获取待注入的同步命名空间
+    // 获取待注入的同步域
     private List<String> getSyncScope(String variableScope) {
-        List<String> scopes = new ArrayList<String>();// 声明待注入命名空间集合列表
-        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入命名空间
-            scopes.add("method"); // 待注入命名空间集合添加"method"类
-            scopes.add("block");// 待注入命名空间集合添加"block"类
-        } else {// 若指定了待注入命名空间
-            scopes.add(variableScope);// 直接在注入命名空间集合添加指定的命名空间类型
+        List<String> scopes = new ArrayList<String>();// 声明待注入域集合列表
+        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入域
+            scopes.add("method"); // 待注入域集合添加"method"类
+            scopes.add("block");// 待注入域集合添加"block"类
+        } else {// 若指定了待注入域
+            scopes.add(variableScope);// 直接在注入域集合添加指定的域类型
         }
         return scopes;
     }

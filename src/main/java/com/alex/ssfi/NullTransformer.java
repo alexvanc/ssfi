@@ -117,7 +117,7 @@ public class NullTransformer extends BasicTransformer {
         this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName());// 获取目标包名
         this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName());// 获取目标类名
         this.injectInfo.put("Method", targetMethod.getSubSignature());// 获取目标函数签名
-        List<String> scopes = getTargetScope(this.parameters.getVariableScope());// 获取目标命名空间集合
+        List<String> scopes = getTargetScope(this.parameters.getVariableScope());// 获取目标域集合
 
         Map<String, List<Object>> allVariables = this.getAllVariables(b);// 获取目标Body相关的所有variable，并按照Field、Local、Parameter分组保存
         logger.debug("Try to inject NULL_FAULT into " + this.injectInfo.get("Package") + " "
@@ -125,18 +125,18 @@ public class NullTransformer extends BasicTransformer {
 
         // randomly combine scope, variable
         while (true) {
-            int scopesSize = scopes.size();// 获取待注入的命名空间集合
+            int scopesSize = scopes.size();// 获取待注入的域集合
             if (scopesSize == 0) {
                 logger.debug("Cannot find qualified scopes");
                 break;
             }
-            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);// 随机选择待注入的命名空间的索引
-            String scope = scopes.get(scopeIndex);// 获取待注入的命名空间
-            scopes.remove(scopeIndex); // 在待注入的命名空间集合中，移除将要进行尝试的命名空间
-            this.injectInfo.put("VariableScope", scope);// 记录待注入的命名空间
+            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize);// 随机选择待注入的域的索引
+            String scope = scopes.get(scopeIndex);// 获取待注入的域
+            scopes.remove(scopeIndex); // 在待注入的域集合中，移除将要进行尝试的域
+            this.injectInfo.put("VariableScope", scope);// 记录待注入的域
 
             // randomly combine variable, action
-            List<Object> qualifiedVariables = this.getQualifiedVariables(b, allVariables, scope);// 获取目标命名空间的variable集合，作为待注入的variable集合
+            List<Object> qualifiedVariables = this.getQualifiedVariables(b, allVariables, scope);// 获取目标域的variable集合，作为待注入的variable集合
             while (true) {
                 int variablesSize = qualifiedVariables.size();// 获取待注入variable集合的大小
                 if (variablesSize == 0) {
@@ -441,7 +441,7 @@ public class NullTransformer extends BasicTransformer {
         return stmts; // 返回故障注入语句
     }
 
-    // 将body内的variable按照命名空间分组返回
+    // 将body内的variable按照域分组返回
     private Map<String, List<Object>> getAllVariables(Body b) {
         Map<String, List<Object>> result = new HashMap<String, List<Object>>();// 声明结果Map
         List<Local> tmpPLocals = b.getParameterLocals();// 获取全部的Parameter变量
@@ -531,19 +531,19 @@ public class NullTransformer extends BasicTransformer {
     private List<Object> getQualifiedVariables(Body b, Map<String, List<Object>> allVariables, String scope) {
         // just copy list
         List<Object> variablesInScope = allVariables.get(scope);
-        return new ArrayList<Object>(variablesInScope); // 返回目标命名空间内的所有variable
+        return new ArrayList<Object>(variablesInScope); // 返回目标域内的所有variable
     }
 
     // we should decide whether choose return as a scope
     private List<String> getTargetScope(String variableScope) {
-        List<String> scopes = new ArrayList<String>();// 声明待注入命名空间集合列表
-        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入命名空间
-            scopes.add("local");// 待注入命名空间集合添加"local"类
-            scopes.add("field");// 待注入命名空间集合添加"field"类
-            scopes.add("parameter");// 待注入命名空间集合添加"parameter"类
-            scopes.add("return");// 待注入命名空间集合添加"return"类
-        } else {// 若指定了待注入命名空间
-            scopes.add(variableScope);// 直接在注入命名空间集合添加指定的命名空间类型
+        List<String> scopes = new ArrayList<String>();// 声明待注入域集合列表
+        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入域
+            scopes.add("local");// 待注入域集合添加"local"类
+            scopes.add("field");// 待注入域集合添加"field"类
+            scopes.add("parameter");// 待注入域集合添加"parameter"类
+            scopes.add("return");// 待注入域集合添加"return"类
+        } else {// 若指定了待注入域
+            scopes.add(variableScope);// 直接在注入域集合添加指定的域类型
         }
         return scopes;
     }

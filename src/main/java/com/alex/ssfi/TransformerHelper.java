@@ -34,6 +34,8 @@ public class TransformerHelper {
                 return new ExceptionUncaughtTransformer(parameter);
             case EXCEPTION_UNHANDLED_FAULT:
                 return new ExceptionUnHandledTransformer(parameter);
+            case ATTRIBUTE_SHADOWED_FAULT: // added
+                return new ShadowingAttributeTransformer(parameter);
             case SWITCH_FALLTHROUGH_FAULT:
                 return new SwitchFallThroughTransformer(parameter);
             case SWITCH_MISS_DEFAULT_FAULT:

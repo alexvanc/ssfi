@@ -89,12 +89,12 @@ public abstract class BasicTransformer extends BodyTransformer {
         SootClass fWriterClass = Scene.v().getSootClass("java.io.FileWriter"); // 获取"java.io.FileWriter"类
         SootClass stringClass = Scene.v().getSootClass("java.lang.String");// 获取"java.lang.String"类
         Local writer = Jimple.v().newLocal("actWriter", RefType.v(fWriterClass)); // 创建局部对象 FileWriter actWriter
-        b.getLocals().add(writer); // 将"actWriter"添加到b的命名空间
+        b.getLocals().add(writer); // 将"actWriter"添加到b的域
         // create a local variable to store the value time
         Local mstime = Jimple.v().newLocal("mstime", LongType.v());  // 创建局部对象 long mstime
         Local mstimeS = Jimple.v().newLocal("mstimeS", RefType.v(stringClass)); // 创建局部对象 String mstimeS
-        b.getLocals().add(mstime); // 将"mstime"添加到b的命名空间
-        b.getLocals().add(mstimeS); // 将"mstimeS"添加到b的命名空间
+        b.getLocals().add(mstime); // 将"mstime"添加到b的域
+        b.getLocals().add(mstimeS); // 将"mstimeS"添加到b的域
         SootMethod constructor = fWriterClass.getMethod("void <init>(java.lang.String,boolean)"); // 获取"FileWriter"的构造函数
         SootMethod stringConstructor = stringClass.getMethod("void <init>()"); // 获取"String"的构造函数
         SootMethod printMethod = Scene.v().getMethod("<java.io.Writer: void write(java.lang.String)>"); // 获取打印函数"java.io.Writer: void write(java.lang.String)"
@@ -175,10 +175,10 @@ public abstract class BasicTransformer extends BodyTransformer {
 
         if (exeCounter == null) { // 若目标Body未声明"sootCounter"字段
             exeCounter = new SootField("sootCounter", LongType.v(), Modifier.STATIC); // 在目标Body内声明"sootCounter"字段
-            b.getMethod().getDeclaringClass().addField(exeCounter); // 并将该soot执行计数器添加到目标Body所在类的命名空间内
+            b.getMethod().getDeclaringClass().addField(exeCounter); // 并将该soot执行计数器添加到目标Body所在类的域内
         }
         Local tmp = Jimple.v().newLocal("sootTmpExeCounter", LongType.v()); // 获取soot局部执行计数器
-        b.getLocals().add(tmp); // 并在该soot局部执行计数器添加到目标Body的命名空间内
+        b.getLocals().add(tmp); // 并在该soot局部执行计数器添加到目标Body的域内
         AssignStmt copyStmt = Jimple.v().newAssignStmt(tmp, Jimple.v().newStaticFieldRef(exeCounter.makeRef())); // 赋值语句 sootTmpExeCounter = sootCounter
         AddExpr addExpr = Jimple.v().newAddExpr(tmp, LongConstant.v(1)); // 加法语句 sootTmpExeCounter + 1
         AssignStmt addStmt = Jimple.v().newAssignStmt(tmp, addExpr); // 赋值语句 sootTmpExeCounter = sootTmpExeCounter + 1
@@ -236,7 +236,7 @@ public abstract class BasicTransformer extends BodyTransformer {
         List<Stmt> conditionStmts = new ArrayList<Stmt>();
         String activationMode = this.parameters.getActivationMode(); // 获取激活模式
         Local tmpActivated = Jimple.v().newLocal("sootActivated", BooleanType.v()); // 创建局部布尔变量"sootActivated"
-        b.getLocals().add(tmpActivated); // 将局部变量"sootActivated"，添加到b的命名空间
+        b.getLocals().add(tmpActivated); // 将局部变量"sootActivated"，添加到b的域
 
         if (activationMode.equals("ALWAYS")) { // 若激活模式为"ALWAYS"
             // if false, go to the default target
@@ -251,7 +251,7 @@ public abstract class BasicTransformer extends BodyTransformer {
         } else if (activationMode.equals("FIRST")) { // 若激活模式为"ALWAYS"
             // add flag
             Local tmpCounterRef = Jimple.v().newLocal("sootCounterRef", LongType.v()); // 创建局部变量"sootCounterRef"
-            b.getLocals().add(tmpCounterRef); // 将局部变量"sootCounterRef"，添加到b的命名空间
+            b.getLocals().add(tmpCounterRef); // 将局部变量"sootCounterRef"，添加到b的域
             SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v());// 获取字段布尔变量"sootActivated"
             AssignStmt copyStmt1 = Jimple.v().newAssignStmt(tmpActivated,
                     Jimple.v().newStaticFieldRef(activated.makeRef()));// 复制语句 sootActivated = this.sootActivated
@@ -269,7 +269,8 @@ public abstract class BasicTransformer extends BodyTransformer {
 
         } else if (activationMode.equals("RANDOM") || activationMode.equals("FIXED")) { // 若激活模式为"RANDOM"或"FIXED"
             Local tmpCounterRef = Jimple.v().newLocal("sootCounterRef", LongType.v()); // 创建局部变量"sootCounterRef"
-            b.getLocals().add(tmpCounterRef);// 将局部变量"sootCounterRef"，添加到b的命名空间
+            b.getLocals().add(tmpCounterRef);// 将局部变量"sootCounterRef"，添加到b的域
+
             SootField activated = b.getMethod().getDeclaringClass().getFieldUnsafe("sootActivated", BooleanType.v()); // 获取字段变量"sootActivated"
             AssignStmt copyStmt1 = Jimple.v().newAssignStmt(tmpActivated,
                     Jimple.v().newStaticFieldRef(activated.makeRef())); // 复制语句 sootActivated = this.sootActivated

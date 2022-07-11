@@ -78,7 +78,7 @@ public class ValueTransformer extends BasicTransformer {
         this.injectInfo.put("Package", targetMethod.getDeclaringClass().getPackageName()); // 获取目标包名
         this.injectInfo.put("Class", targetMethod.getDeclaringClass().getName()); // 获取目标类名
         this.injectInfo.put("Method", targetMethod.getSubSignature()); // 获取目标函数签名
-        List<String> scopes = getTargetScope(this.parameters.getVariableScope()); // 获取目标命名空间集合
+        List<String> scopes = getTargetScope(this.parameters.getVariableScope()); // 获取目标域集合
 
         Map<String, List<Object>> allVariables = this.getAllVariables(b); // 获取目标Body相关的所有variable，并按照Field、Local、Parameter分组保存
         logger.debug("Try to inject Value_FAULT into " + this.injectInfo.get("Package") + " "
@@ -86,15 +86,15 @@ public class ValueTransformer extends BasicTransformer {
 
         // randomly combine scope, type , variable, action
         while (true) {
-            int scopesSize = scopes.size(); // 获取待注入的命名空间集合
+            int scopesSize = scopes.size(); // 获取待注入的域集合
             if (scopesSize == 0) {
                 logger.debug("Cannot find qualified scopes");
                 break;
             }
-            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize); // 随机选择待注入的命名空间的索引
-            String scope = scopes.get(scopeIndex); // 获取待注入的命名空间
-            scopes.remove(scopeIndex); // 在待注入的命名空间集合中，移除将要进行尝试的命名空间
-            this.injectInfo.put("VariableScope", scope); // 记录待注入的命名空间
+            int scopeIndex = new Random(System.currentTimeMillis()).nextInt(scopesSize); // 随机选择待注入的域的索引
+            String scope = scopes.get(scopeIndex); // 获取待注入的域
+            scopes.remove(scopeIndex); // 在待注入的域集合中，移除将要进行尝试的域
+            this.injectInfo.put("VariableScope", scope); // 记录待注入的域
             List<String> types = getTargetType(this.parameters.getVariableType()); // 获取目标类型集合
             // randomly combine type, variable, action
             while (true) {
@@ -107,7 +107,7 @@ public class ValueTransformer extends BasicTransformer {
                 types.remove(typeIndex); // 在待注入variable的类型集合中，移除将要进行尝试的类型
                 this.injectInfo.put("VariableType", type); // 记录待注入的类型
                 // randomly combine variable, action
-                List<Object> qualifiedVariables = this.getQualifiedVariables(b, allVariables, scope, type); // 获取目标命名空间目标类型的variable集合，作为待注入的variable集合
+                List<Object> qualifiedVariables = this.getQualifiedVariables(b, allVariables, scope, type); // 获取目标域目标类型的variable集合，作为待注入的variable集合
                 while (true) {
                     int variablesSize = qualifiedVariables.size(); // 获取待注入variable集合的大小
                     if (variablesSize == 0) {
@@ -157,7 +157,7 @@ public class ValueTransformer extends BasicTransformer {
             this.injectInfo.put("VariableName", local.getName());
             this.injectInfo.put("Action", action);
             return this.injectLocalWithAction(b, local, action); // 对local variable 进行故障注入
-        } else if (scope.equals("parameter")) { // 若待注入的命名空间是Method的参数域
+        } else if (scope.equals("parameter")) { // 若待注入的域是Method的参数域
             Local local = (Local) variable; // 将待注入的variable转换为Soot参数类型
             this.injectInfo.put("VariableName", local.getName());
             this.injectInfo.put("Action", action);
@@ -632,7 +632,7 @@ public class ValueTransformer extends BasicTransformer {
                     addedValue = Byte.parseByte(addedStringValue);// 获取目标byte value
                 }
                 local = Jimple.v().newLocal("field_tmp", ByteType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 AddExpr addExp = Jimple.v().newAddExpr(local, IntConstant.v(addedValue));// 创建加法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取byte value的改变语句
                 if (isStaticField) {
@@ -650,7 +650,7 @@ public class ValueTransformer extends BasicTransformer {
                     addedValue = Short.parseShort(addedStringValue);// 获取目标short value
                 }
                 local = Jimple.v().newLocal("field_tmp", ShortType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 AddExpr addExp = Jimple.v().newAddExpr(local, IntConstant.v(addedValue));// 创建加法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取short value的改变语句
                 if (isStaticField) {
@@ -668,7 +668,7 @@ public class ValueTransformer extends BasicTransformer {
                     addedValue = Integer.parseInt(addedStringValue); // 获取目标int value
                 }
                 local = Jimple.v().newLocal("field_tmp", IntType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 AddExpr addExp = Jimple.v().newAddExpr(local, IntConstant.v(addedValue));// 创建加法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取int value的改变语句
                 if (isStaticField) {
@@ -686,7 +686,7 @@ public class ValueTransformer extends BasicTransformer {
                     addedValue = Long.parseLong(addedStringValue);// 获取目标long value
                 }
                 local = Jimple.v().newLocal("field_tmp", LongType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 AddExpr addExp = Jimple.v().newAddExpr(local, LongConstant.v(addedValue));// 创建加法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取long value的改变语句
                 if (isStaticField) {
@@ -704,7 +704,7 @@ public class ValueTransformer extends BasicTransformer {
                     addedValue = Float.parseFloat(addedStringValue);// 获取目标float value
                 }
                 local = Jimple.v().newLocal("field_tmp", FloatType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 AddExpr addExp = Jimple.v().newAddExpr(local, FloatConstant.v(addedValue));// 创建加法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取float value的改变语句
                 if (isStaticField) {
@@ -722,7 +722,7 @@ public class ValueTransformer extends BasicTransformer {
                     addedValue = Double.parseDouble(addedStringValue);// 获取目标double value
                 }
                 local = Jimple.v().newLocal("field_tmp", DoubleType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 AddExpr addExp = Jimple.v().newAddExpr(local, DoubleConstant.v(addedValue));// 创建加法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取double value的改变语句
                 if (isStaticField) {
@@ -750,7 +750,7 @@ public class ValueTransformer extends BasicTransformer {
                     subededValue = Byte.parseByte(subedStringValue);// 获取目标byte value
                 }
                 local = Jimple.v().newLocal("field_tmp", ByteType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 SubExpr addExp = Jimple.v().newSubExpr(local, IntConstant.v(subededValue));// 创建减法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取byte value的改变语句
                 if (isStaticField) {
@@ -767,7 +767,7 @@ public class ValueTransformer extends BasicTransformer {
                     subededValue = Short.parseShort(subedStringValue);// 获取目标short value
                 }
                 local = Jimple.v().newLocal("field_tmp", ShortType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 SubExpr addExp = Jimple.v().newSubExpr(local, IntConstant.v(subededValue));// 创建减法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取short value的改变语句
                 if (isStaticField) {
@@ -785,7 +785,7 @@ public class ValueTransformer extends BasicTransformer {
                     subededValue = Integer.parseInt(subedStringValue);// 获取目标int value
                 }
                 local = Jimple.v().newLocal("field_tmp", IntType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 SubExpr addExp = Jimple.v().newSubExpr(local, IntConstant.v(subededValue));// 创建减法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取short value的改变语句
                 if (isStaticField) {
@@ -803,7 +803,7 @@ public class ValueTransformer extends BasicTransformer {
                     subededValue = Long.parseLong(subedStringValue);// 获取目标long value
                 }
                 local = Jimple.v().newLocal("field_tmp", LongType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 SubExpr addExp = Jimple.v().newSubExpr(local, LongConstant.v(subededValue));// 创建减法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取long value的改变语句
                 if (isStaticField) {
@@ -821,7 +821,7 @@ public class ValueTransformer extends BasicTransformer {
                     subededValue = Float.parseFloat(subedStringValue);// 获取目标float value
                 }
                 local = Jimple.v().newLocal("field_tmp", FloatType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 SubExpr addExp = Jimple.v().newSubExpr(local, FloatConstant.v(subededValue));// 创建减法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取float value的改变语句
                 if (isStaticField) {
@@ -839,7 +839,7 @@ public class ValueTransformer extends BasicTransformer {
                     subededValue = Double.parseDouble(subedStringValue);// 获取目标double value
                 }
                 local = Jimple.v().newLocal("field_tmp", DoubleType.v());// 创建局部临时变量对象
-                b.getLocals().add(local);// 在局部变量命名空间，添加该局部临时变量
+                b.getLocals().add(local);// 在局部变量域，添加该局部临时变量
                 SubExpr addExp = Jimple.v().newSubExpr(local, DoubleConstant.v(subededValue));// 创建减法表达式对象
                 valueChangeStmt = Jimple.v().newAssignStmt(local, addExp);// 创建赋值表达式对象；获取double value的改变语句
                 if (isStaticField) {
@@ -918,7 +918,7 @@ public class ValueTransformer extends BasicTransformer {
         return false;
     }
 
-    // 将body内的variable按照命名空间分组返回
+    // 将body内的variable按照域分组返回
     private Map<String, List<Object>> getAllVariables(Body b) {
         Map<String, List<Object>> result = new HashMap<String, List<Object>>();// 声明结果Map
         List<Local> tmpPLocals = b.getParameterLocals();// 获取全部的Parameter变量
@@ -965,15 +965,15 @@ public class ValueTransformer extends BasicTransformer {
         return result;// 返回结果Map
     }
 
-    // 从配置文件的字符串，获取待注入variable的命名空间
+    // 从配置文件的字符串，获取待注入variable的域
     private List<String> getTargetScope(String variableScope) {
-        List<String> scopes = new ArrayList<String>();// 声明待注入命名空间集合列表
-        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入命名空间
-            scopes.add("local");// 待注入命名空间集合添加"local"类
-            scopes.add("field");// 待注入命名空间集合添加"field"类
-            scopes.add("parameter");// 待注入命名空间集合添加"parameter"类
-        } else {// 若指定了待注入命名空间
-            scopes.add(variableScope);// 直接在注入命名空间集合添加指定的命名空间类型
+        List<String> scopes = new ArrayList<String>();// 声明待注入域集合列表
+        if ((variableScope == null) || (variableScope == "")) {// 若未指定待注入域
+            scopes.add("local");// 待注入域集合添加"local"类
+            scopes.add("field");// 待注入域集合添加"field"类
+            scopes.add("parameter");// 待注入域集合添加"parameter"类
+        } else {// 若指定了待注入域
+            scopes.add(variableScope);// 直接在注入域集合添加指定的域类型
         }
         return scopes;
     }
