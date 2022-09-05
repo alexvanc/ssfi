@@ -2,7 +2,7 @@
 inputPath: testInput  #it should be a folder of an unpacked jar
 outputPath: testOutput #where the classfile with injected faults will be
 dependencyPath: dependency #it should be a folder of unpacked jars # 必须给定一个有效值，否则报错
-activationLogFile: tmp/activation.log # record whether an injected fault was ever activated
+activationLogFile: activation.log # record whether an injected fault was ever activated
 debug: false
 activationMode: ALWAYS # ALWAYS/RANDOM/FIXED/CUSTOMIZED
 activationRate: 5  # the probability(1/n) of fault activation, only activated once, only used when the activationMode is RANDOM
@@ -12,13 +12,13 @@ customizedActivation: com.alex.ssfi.util.CustomActivationController #  only used
 
 #if not specified, each configuration item will be randomly assigned a value
 
-type: #one of the 12 fault types。 VALUE_FAULT/NULL_FAULT/EXCEPTION_SHORTCIRCUIT_FAULT/EXCEPTION_UNCAUGHT_FAULT/EXCEPTION_UNHANDLED_FAULT/ATTRIBUTE_SHADOWED_FAULT/SWITCH_FALLTHROUGH_FAULT/SWITCH_MISS_DEFAULT_FAULT/UNUSED_INVOKE_REMOVED_FAULT/CONDITION_BORDER_FAULT/CONDITION_INVERSED_FAULT/SYNC_FAULT
+type:  ATTRIBUTE_SHADOWED_FAULT #one of the 12 fault types。 VALUE_FAULT/NULL_FAULT/EXCEPTION_SHORTCIRCUIT_FAULT/EXCEPTION_UNCAUGHT_FAULT/EXCEPTION_UNHANDLED_FAULT/ATTRIBUTE_SHADOWED_FAULT/SWITCH_FALLTHROUGH_FAULT/SWITCH_MISS_DEFAULT_FAULT/UNUSED_INVOKE_REMOVED_FAULT/CONDITION_BORDER_FAULT/CONDITION_INVERSED_FAULT/SYNC_FAULT
 locationPattern:
   packageP: # 待故障注入的package的名字
   classP: # 待故障注入的class的名字
   methodP: # 待故障注入的method的名字
   variableP:  # 待故障注入的variable的名字
-variableScope: #local/field/parameter
+variableScope:  #local/field/parameter
 variableType: # byte/short/int/long/float/double/string
 action: # TO/ADD/SUB，与variable类型相关
 targetValue: # 故障注入时辅助用的value，例如替代为该value，或与该value相加减
