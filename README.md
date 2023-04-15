@@ -1,8 +1,12 @@
 # SSFI Introduction
 
+
+
+SSFI is a Statement-level Software Fault Injection tool, which is able to inject 12 different types of software faults into software systems that can be compiled into Java Bytecode. 
+
 ![SSFI workflow](resource/ssfi_workflow.jpg)
 
-SSFI is a Statement-level Software Fault Injection tool, which is able to inject 12 different types of software faults into software systems that can be compiled into Java Bytecode. The fault types are listed in the following table.
+The fault types are listed in the following table.
 
 ![SSFI fault types](resource/fault_types.jpg)
 
